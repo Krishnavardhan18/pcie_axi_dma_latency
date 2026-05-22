@@ -1,0 +1,20 @@
+#-----------------------------------------------------------
+# Vivado v2022.2 (64-bit)
+# SW Build 3671981 on Fri Oct 14 04:59:54 MDT 2022
+# IP Build 3669848 on Fri Oct 14 08:30:02 MDT 2022
+# Start of session at: Fri May 22 20:33:27 2026
+# Process ID: 108215
+# Current directory: /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/scripts
+# Command line: vivado
+# Log file: /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/scripts/vivado.log
+# Journal file: /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/scripts/vivado.jou
+# Running On: get-main, OS: Linux, CPU Frequency: 798.083 MHz, CPU Physical cores: 2, Host memory: 16682 MB
+#-----------------------------------------------------------
+start_gui
+create_project mtp_pcie_axi_dma /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/scripts/mtp_pcie_axi_dma -part xc7k70tfbv676-1
+add_files -norecurse {/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/axis_fifo.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/axi_mm2s_adapter.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/pcie_axi_pkg.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/pcie_axi_dma_top.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/batching_unit.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/pcie_model.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/latency_monitor.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/stream_sink.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/dma_model.sv}
+update_compile_order -fileset sources_1
+update_compile_order -fileset sources_1
+set_property SOURCE_SET sources_1 [get_filesets sim_1]
+add_files -fileset sim_1 -norecurse /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/verif/tb/tb_pcie_axi_dma.sv
+synth_design -rtl -rtl_skip_mlo -name rtl_1

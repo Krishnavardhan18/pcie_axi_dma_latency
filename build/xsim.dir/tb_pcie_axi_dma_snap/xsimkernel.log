@@ -1,0 +1,7 @@
+Running: xsim.dir/tb_pcie_axi_dma_snap/xsimk -wdb /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/build/tb_pcie_axi_dma.wdb -simmode gui -simrunnum 0 -socket 45557
+Design successfully loaded
+Design Loading Memory Usage: 29284 KB (Peak: 29764 KB)
+Design Loading CPU Usage: 40 ms
+Simulation completed
+Simulation Memory Usage: 119992 KB (Peak: 168552 KB)
+Simulation CPU Usage: 250 ms

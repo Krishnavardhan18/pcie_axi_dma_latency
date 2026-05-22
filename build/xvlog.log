@@ -1,0 +1,19 @@
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/pcie_axi_pkg.sv" into library work
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/pcie_model.sv" into library work
+INFO: [VRFC 10-311] analyzing module pcie_model
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/dma_model.sv" into library work
+INFO: [VRFC 10-311] analyzing module dma_model
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/axi_mm2s_adapter.sv" into library work
+INFO: [VRFC 10-311] analyzing module axi_mm2s_adapter
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/axis_fifo.sv" into library work
+INFO: [VRFC 10-311] analyzing module axis_fifo
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/batching_unit.sv" into library work
+INFO: [VRFC 10-311] analyzing module batching_unit
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/stream_sink.sv" into library work
+INFO: [VRFC 10-311] analyzing module stream_sink
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/latency_monitor.sv" into library work
+INFO: [VRFC 10-311] analyzing module latency_monitor
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/design/rtl/pcie_axi_dma_top.sv" into library work
+INFO: [VRFC 10-311] analyzing module pcie_axi_dma_top
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/verif/tb/tb_pcie_axi_dma.sv" into library work
+INFO: [VRFC 10-311] analyzing module tb_pcie_axi_dma

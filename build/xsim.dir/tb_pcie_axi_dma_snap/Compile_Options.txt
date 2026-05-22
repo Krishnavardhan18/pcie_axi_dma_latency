@@ -1,0 +1,1 @@
+"tb_pcie_axi_dma" --snapshot "tb_pcie_axi_dma_snap" -generic_top "TB_SCENARIO=0" -generic_top "FIFO_DEPTH=64" -generic_top "BATCH_COUNT=4" -generic_top "BATCH_TIMEOUT=64" --timescale "1ns/1ps" --debug "typical" -log "xelab.log" 
