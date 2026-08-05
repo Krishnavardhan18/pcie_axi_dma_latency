@@ -1,0 +1,113 @@
+=============================================================================
+PCIe-AXI DMA Latency — Multi-Config Simulation Comparison (v2)
+Generated: 2026-08-01
+Tool: Vivado xsim 2022.2
+=============================================================================
+
+RTL/TB changes made since v1 (see git diff for detail):
+  - stream_sink.sv: added optional STALL_EN/STALL_PERIOD/STALL_READY
+    back-pressure model (default disabled — identical to original
+    always-ready behavior). Needed because with an always-ready sink,
+    axis_fifo drains every cycle it holds data (FWFT) and FIFO_DEPTH can
+    NEVER affect anything — confirmed as the root cause of the "FIFO_DEPTH
+    made zero difference" result in v1.
+  - stream_sink.sv: fixed a real correctness bug this exposed — pkt_done
+    was qualified only on (s_tvalid && s_tlast), which is only a valid
+    AXI-S "beat transferred" check when s_tready is permanently 1. Under
+    the new stall model, tvalid/tlast can stay asserted for several cycles
+    while waiting for tready, so the old check fired pkt_done once per
+    waiting cycle instead of once per actual transfer (pkt_count read 24
+    instead of 6 before the fix). Now correctly gated on
+    (s_tvalid && s_tready && s_tlast).
+  - pcie_axi_dma_top.sv: fixed fifo_occupancy port width, which was sized
+    to the package default FIFO_DEPTH (64) instead of the actual FIFO_DEPTH
+    parameter — silently truncated for FIFO_DEPTH=256 runs.
+  - tb_pcie_axi_dma.sv: added FIFO_PEAK / FULL? columns to [RESULT] rows,
+    tracking peak fifo_occupancy and whether fifo_full was ever asserted
+    during each packet's transit.
+  - Makefile: exposed SINK_STALL_EN/PERIOD/READY as overridable generics.
+
+Runs executed (8 total, all PASS — no timeouts, no $error, watchdog held):
+  1. run_scenario0_baseline_fifo64.log      TB_SCENARIO=0                         FIFO_DEPTH=64
+  2. run_scenario1_batching_fifo64.log      TB_SCENARIO=1 (batching, non-bypass)  FIFO_DEPTH=64
+  3. run_scenario2_fifo16.log               TB_SCENARIO=2                         FIFO_DEPTH=16
+  4. run_scenario2_fifo64.log               TB_SCENARIO=2                         FIFO_DEPTH=64
+  5. run_scenario2_fifo256.log              TB_SCENARIO=2                         FIFO_DEPTH=256
+  6. run_scenario2_stall_fifo16.log         TB_SCENARIO=2 SINK_STALL_EN=1(1/4)    FIFO_DEPTH=16
+  7. run_scenario2_stall_fifo64.log         TB_SCENARIO=2 SINK_STALL_EN=1(1/4)    FIFO_DEPTH=64
+  8. run_scenario2_stall_fifo256.log        TB_SCENARIO=2 SINK_STALL_EN=1(1/4)    FIFO_DEPTH=256
+
+-----------------------------------------------------------------------------
+Runs 1-5 (always-ready sink) — regression check, unchanged vs. before
+-----------------------------------------------------------------------------
+PKT_ID | SIZE (B) | LATENCY (cyc) | EFFICIENCY (B/cyc) | FIFO_PEAK | FULL?
+     0 |       64 |            71 |               0.90 |         1 |    no
+     1 |      128 |           111 |               1.15 |         1 |    no
+     2 |      256 |           191 |               1.34 |         1 |    no
+     3 |      512 |           351 |               1.46 |         1 |    no
+     4 |     1024 |           671 |               1.53 |         1 |    no
+     5 |     4096 |          2591 |               1.58 |         1 |    no
+(identical for FIFO_DEPTH=16/64/256 — confirms fix didn't disturb the
+default, always-ready-sink behavior. FIFO_PEAK=1 everywhere: FWFT drains
+same-cycle, so the FIFO truly never holds more than one beat.)
+
+-----------------------------------------------------------------------------
+Runs 6-8 (SINK_STALL_EN=1, consumer accepts 1 of every 4 cycles)
+-----------------------------------------------------------------------------
+                       FIFO_DEPTH=16          FIFO_DEPTH=64          FIFO_DEPTH=256
+SIZE(B)  LATENCY  |  PEAK  FULL?  |  PEAK  FULL?  |  PEAK  FULL?
+     64       94  |     6    no  |     6    no   |     6    no
+    128      157  |    12    no  |    12    no   |    12    no
+    256      285  |    16   YES  |    24    no   |    24    no
+    512      541  |    16   YES  |    48    no   |    48    no
+   1024     1053  |    16   YES  |    64   YES   |    96    no
+   4096     4125  |    16   YES  |    64   YES   |   256   YES
+
+Key result: LATENCY is identical across all three FIFO_DEPTH values for
+every packet size. This is correct, expected behavior, not a flaw in the
+experiment:
+
+  Once the sink's fixed drain rate (1-in-4 cycles) becomes the pipeline
+  bottleneck, the total time to push a fixed amount of data through it is
+  set by that rate alone (~4 cycles/beat), independent of how much buffer
+  sits upstream. A deeper FIFO only delays *when* back-pressure starts
+  reaching the producer — it cannot make the consumer drain faster. This
+  is a direct consequence of queueing at a single fixed-rate server: buffer
+  depth changes transient/burst absorption, not steady-state throughput of
+  a single continuous flow.
+
+  What FIFO_DEPTH *does* change, exactly as the depth-sweep experiment is
+  documented to measure (see Readme.md "axis_fifo" section): how much of
+  the packet the FIFO can absorb before fifo_full asserts and back-pressure
+  ripples upstream.
+    - DEPTH=16  (128 B) fills for every packet >= 256 B — matches "stalls
+      very quickly for large packets."
+    - DEPTH=64  (512 B) fills only for packets >= 1 KB — matches "stalls
+      only for multi-KB bursts."
+    - DEPTH=256 (2 KB)  fills only for the 4 KB packet, since even a 2 KB
+      buffer is smaller than a 4 KB payload — matches "rarely stalls."
+  This is the correct, useful FIFO_DEPTH finding: it governs buffering
+  headroom / how early back-pressure engages, not single-flow completion
+  latency under a sustained bottleneck. To make FIFO_DEPTH move the total
+  latency number itself, the workload would need to be burst + idle-gap
+  traffic (so a deeper buffer lets the producer get further ahead between
+  bursts) rather than one continuous packet driven flat-out — that is a
+  different experiment, not implemented here.
+
+-----------------------------------------------------------------------------
+Scenario 1 — batching (BATCH_COUNT=4 x 64B -> one frame), FIFO_DEPTH=64,
+always-ready sink
+-----------------------------------------------------------------------------
+BATCH# | SIZE (B) | LATENCY (cyc) | EFFICIENCY (B/cyc) | FIFO_PEAK | FULL? | CONFIG
+     0 |      256 |           230 |               1.11 |         1 |    no | BATCH=4,FIFO=64
+
+vs. baseline 4x64B sent individually (71 cyc each, scenario 0):
+  4 individual packets, fully serial   >= 4 x 71 = 284 cyc
+  1 batched frame of 4x64B (256B)      =  230 cyc measured
+  -> batching_unit reduces total latency for this burst by ~19%
+     (230 vs 284 cyc), because only one tlast/pkt_count event is paid
+     for instead of four.
+
+=============================================================================
+Raw per-run logs: scripts/sim_logs/run*.log
+=============================================================================

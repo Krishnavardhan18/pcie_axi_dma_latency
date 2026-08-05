@@ -1,0 +1,97 @@
+% Chapter 3
+
+\chapter{Background}
+
+\label{Chapter3}
+
+\lhead{Chapter 3. \emph{Background}}
+
+This chapter presents the protocol and analytical background required to justify the latency model implemented later in the thesis. \autoref{sec:ch3_pcie} summarises the relevant parts of the PCIe transaction layer, \autoref{sec:ch3_axi} summarises the AMBA AXI4 and AXI4-Stream protocols, \autoref{sec:ch3_dma} describes descriptor-based DMA operation, and \autoref{sec:ch3_latency_model} combines these into the fixed-plus-proportional latency model used throughout the remainder of the thesis.
+
+%----------------------------------------------------------------------------------------
+
+\section{The PCIe Transaction Layer}
+\label{sec:ch3_pcie}
+
+\ac{PCIe} is a point-to-point, packet-switched interconnect organised as three layers: physical, data link, and transaction \cite{pcisig2017base}. Application-level reads and writes are carried as \acp{TLP} at the transaction layer. Every \ac{TLP} carries a header (12 or 16 bytes depending on addressing mode) that encodes the transaction type, requester ID, tag, address, and length, in addition to whatever payload it carries. Two mechanisms in this layering contribute latency that does not depend on payload size:
+
+\begin{itemize}
+    \item \textbf{Header and framing overhead.} Every TLP, regardless of payload size, must be assembled, have its header fields populated, and pass through link-layer framing (start/end control symbols, CRC) before transmission, and must be decoded and checked symmetrically at the receiver.
+    \item \textbf{Credit-based flow control.} A PCIe transmitter may not send a TLP unless it holds sufficient flow-control credits, advertised by the receiver. For an idle or lightly loaded link, the first TLP of a transaction typically requires a credit round-trip before it can proceed, and for posted writes/completions a further acknowledgement may be pipelined behind it \cite{budruk2004pcie}.
+\end{itemize}
+
+Neither of these costs scales with the number of bytes in the payload; both are why a link that appears to run near its peak line rate for large bursts can appear far slower, per byte, for small ones. Beyond this fixed cost, transmission of the payload itself does scale with size: at a given link width and speed, moving $S$ bytes takes time proportional to $S$, i.e. proportional to the number of PCIe \emph{DWORDs} (4-byte units) the payload occupies, since PCIe headers and data paths are DWORD-aligned. This structure -- a fixed term plus a term proportional to $\lceil S/4 \rceil$ DWORDs -- is the basis for the PCIe delay model derived in \autoref{sec:ch3_latency_model}.
+
+%----------------------------------------------------------------------------------------
+
+\section{The AMBA AXI4 and AXI4-Stream Protocols}
+\label{sec:ch3_axi}
+
+On the fabric side of a PCIe endpoint, the \ac{AMBA} \ac{AXI4} protocol \cite{arm2021axi} provides a memory-mapped, burst-oriented interface with independent, decoupled address and data channels, and is the interface most on-chip DMA engines and memory controllers present to a bus fabric. \ac{AXI4-Stream} \cite{arm2010axistream} is a companion protocol that removes addressing entirely, retaining only a simple point-to-point, back-pressured data channel intended for continuous or packetised data movement between IP blocks. Its handshake and sideband signals, all of which are used directly by the datapath implemented in this thesis, are:
+
+\begin{itemize}
+    \item \texttt{tvalid} / \texttt{tready} -- a standard two-sided handshake; a beat of data transfers on any clock edge where both are asserted. Either side may hold its signal without waiting for the other (a valid producer may assert \texttt{tvalid} before \texttt{tready} is seen, and vice versa), which is what allows a downstream stage to back-pressure an upstream one.
+    \item \texttt{tdata} / \texttt{tkeep} -- the payload of the beat and a byte-valid mask, used so that the final beat of a packet whose length is not a multiple of the bus width can mark only its genuinely valid bytes.
+    \item \texttt{tlast} -- asserted on the final beat of a logical packet, delimiting packet boundaries on an otherwise continuous stream.
+    \item \texttt{tuser} / \texttt{tid} -- sideband fields with user-defined meaning; this thesis uses them to carry, respectively, the packet's byte length and its identifying tag through every pipeline stage (\autoref{sec:ch4_sideband}), so that downstream stages and the latency-measurement logic can recover per-packet metadata without a separate side channel.
+\end{itemize}
+
+Because every AXI4-Stream handshake is independently back-pressured, a multi-stage pipeline built from AXI4-Stream connections composes cleanly: each stage need only implement its own \texttt{tvalid}/\texttt{tready} logic correctly, and end-to-end correctness (no lost or duplicated beats) follows automatically. This is the reason the datapath in this thesis is structured as a chain of independent AXI4-Stream stages (\autoref{Chapter4}) rather than a single monolithic state machine.
+
+%----------------------------------------------------------------------------------------
+
+\section{Descriptor-Based DMA Operation}
+\label{sec:ch3_dma}
+
+A DMA engine such as the AMD-Xilinx AXI DMA \ac{IP} \cite{xilinx2021axidma} decouples the host (or an on-chip processor) from the actual movement of data by operating on \emph{descriptors}: small, fixed-format records that specify a source address, destination address, transfer length, and control flags for one transfer. In the simplest, non-scatter-gather mode of operation, the host writes the relevant address/length registers and then triggers the engine, typically by asserting a "run" bit or ringing a doorbell; in scatter-gather mode the engine itself walks a descriptor ring in memory, fetching each descriptor before acting on it. Either way, before the first byte of payload can move, the engine must:
+
+\begin{enumerate}
+    \item Receive or fetch the descriptor (itself potentially another PCIe or memory transaction with its own round-trip latency).
+    \item Parse the descriptor fields and load its internal address/length counters.
+    \item Arbitrate for and begin the underlying memory-mapped read or write burst.
+\end{enumerate}
+
+As with PCIe TLP framing, this sequence takes a broadly fixed number of cycles regardless of how many bytes the descriptor ultimately describes -- a one-byte transfer and a one-megabyte transfer both pay the same descriptor-processing cost. Once the transfer is underway, the engine moves data at a rate set by its internal datapath width and the achievable burst rate of the memory it is reading from or writing to, so total transfer-phase time scales with the payload size divided by the engine's effective bytes-per-cycle rate. This fixed-setup-plus-proportional-transfer structure mirrors the PCIe transaction-layer behaviour of \autoref{sec:ch3_pcie} and is why the two effects compound for small packets.
+
+%----------------------------------------------------------------------------------------
+
+\section{Latency Model}
+\label{sec:ch3_latency_model}
+
+Combining \autoref{sec:ch3_pcie} and \autoref{sec:ch3_dma}, the end-to-end latency of a single packet of size $S$ bytes traversing the PCIe transaction layer followed by a DMA engine can be written as the sum of two fixed-plus-proportional terms:
+
+\begin{equation}
+L_{PCIe}(S) = T_{base} + \left\lceil \frac{S}{4} \right\rceil \cdot T_{dw}
+\label{eq:pcie_latency}
+\end{equation}
+
+\begin{equation}
+L_{DMA}(S) = T_{setup} + \left\lceil \frac{S}{W} \right\rceil
+\label{eq:dma_latency}
+\end{equation}
+
+\begin{equation}
+L_{tot}(S) = L_{PCIe}(S) + L_{DMA}(S) + L_{other}
+\label{eq:total_latency}
+\end{equation}
+
+where $T_{base}$ is the fixed PCIe per-TLP overhead (header assembly, credit-check round trip, and link framing), $T_{dw}$ is the additional PCIe delay per 4-byte DWORD of payload, $T_{setup}$ is the fixed DMA descriptor-processing overhead, $W$ is the DMA engine's datapath width in bytes per cycle, and $L_{other}$ collects the small, size-independent residual latency contributed by pass-through pipeline stages (the AXI-Stream adapter, an empty FIFO, and the sink) between the DMA engine and the point where the packet is considered "delivered". \autoref{Chapter4} and \autoref{Chapter5} implement Equations~\ref{eq:pcie_latency}--\ref{eq:total_latency} directly as the \texttt{pcie\_model} and \texttt{dma\_model} finite-state machines, using representative parameter values of $T_{base}=20$ cycles and $T_{dw}=1$ cycle/DWORD for the PCIe stage (chosen to model roughly a 100--200~ns PCIe Gen3 TLP round trip at a 100~MHz simulation clock) and $T_{setup}=8$ cycles with $W=8$~bytes/cycle for the DMA stage; \autoref{Chapter6} validates the hardware-measured latency of the implemented RTL directly against these closed-form expressions.
+
+Two consequences of Equations~\ref{eq:pcie_latency}--\ref{eq:total_latency} motivate the rest of this thesis. First, effective per-byte efficiency,
+\begin{equation}
+\eta(S) = \frac{S}{L_{tot}(S)},
+\label{eq:efficiency}
+\end{equation}
+is a strictly increasing function of $S$ for fixed $T_{base}$, $T_{dw}$, $T_{setup}$, and $W$, because the fixed terms $T_{base}$ and $T_{setup}$ are amortised over more bytes as $S$ grows while the proportional terms grow linearly with $S$ -- this is exactly the effect quantified experimentally in \autoref{sec:ch7_baseline}. Second, if $N$ packets of size $S$ are sent independently, their combined latency is (in the worst case) $N \cdot L_{tot}(S)$, whereas if they are first coalesced into a single packet of size $N\!\cdot\!S$ and only then passed through the PCIe/DMA stages, the fixed overheads $T_{base}$ and $T_{setup}$ are paid once rather than $N$ times:
+\begin{equation}
+L_{tot}(N\!\cdot\!S) \;<\; N \cdot L_{tot}(S) \quad \text{for } N > 1.
+\label{eq:batch_inequality}
+\end{equation}
+This inequality is the analytical basis for the batching unit designed in \autoref{sec:ch5_batching} and evaluated in \autoref{sec:ch7_batching}.
+
+%----------------------------------------------------------------------------------------
+
+\section{Buffering, Back-Pressure, and Queueing Behaviour}
+\label{sec:ch3_queueing}
+
+Equations~\ref{eq:pcie_latency}--\ref{eq:total_latency} describe the latency of a single packet traversing an otherwise idle pipeline. In practice, a FIFO buffer is placed between DMA-side production and the downstream consumer to decouple bursty production from the consumer's drain rate. Classical queueing theory \cite{kleinrock1975queueing} treats such a buffer as a single-server queue: as long as the arrival rate does not exceed the server's (consumer's) drain rate, an infinite buffer never fills and adds no latency of its own; a finite buffer of depth $D$ only becomes visible once the accumulated backlog would exceed $D$, at which point the producer is back-pressured. This distinction matters for interpreting an AXI-Stream FIFO deployed as in \autoref{sec:ch4_fifo}: buffer depth $D$ governs how much burstiness the pipeline can absorb before back-pressure engages, not the steady-state completion latency of a single, continuously flowing transfer once the consumer's fixed drain rate is the bottleneck. \autoref{sec:ch7_fifo_stall} returns to this point with a direct hardware measurement that separates the two effects.

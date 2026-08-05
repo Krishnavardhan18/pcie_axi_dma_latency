@@ -76,6 +76,18 @@ package pcie_axi_pkg;
   parameter int BATCH_TIMEOUT_DEFAULT = 64;  // flush after N idle cycles
 
   // ---------------------------------------------------------------------------
+  // Stream sink back-pressure model (FIFO depth-sweep experiment)
+  // Default is always-ready (SINK_STALL_EN=0), matching the original
+  // "isolate DMA/PCIe latency from the consumer" design. Setting
+  // SINK_STALL_EN=1 makes the sink accept SINK_STALL_READY cycles out of
+  // every SINK_STALL_PERIOD cycles, which is the only way axis_fifo can
+  // ever actually fill — needed to make FIFO_DEPTH visible in latency.
+  // ---------------------------------------------------------------------------
+  parameter bit SINK_STALL_EN_DEFAULT     = 1'b0;
+  parameter int SINK_STALL_PERIOD_DEFAULT = 4;
+  parameter int SINK_STALL_READY_DEFAULT  = 1;
+
+  // ---------------------------------------------------------------------------
   // Latency monitor
   // ---------------------------------------------------------------------------
   parameter int TIMESTAMP_WIDTH = 32;    // cycle counter width

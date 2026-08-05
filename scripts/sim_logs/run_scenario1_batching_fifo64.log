@@ -1,0 +1,113 @@
+mkdir -p /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/build_kv_scenario1_batching_fifo64
+cd /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/build_kv_scenario1_batching_fifo64 && \
+xvlog --sv --incr \
+    /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/pcie_axi_pkg.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/pcie_model.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/dma_model.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/axi_mm2s_adapter.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/axis_fifo.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/batching_unit.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/stream_sink.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/latency_monitor.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/pcie_axi_dma_top.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/verif/tb/tb_pcie_axi_dma.sv \
+    -log xvlog.log
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/pcie_axi_pkg.sv" into library work
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/pcie_model.sv" into library work
+INFO: [VRFC 10-311] analyzing module pcie_model
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/dma_model.sv" into library work
+INFO: [VRFC 10-311] analyzing module dma_model
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/axi_mm2s_adapter.sv" into library work
+INFO: [VRFC 10-311] analyzing module axi_mm2s_adapter
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/axis_fifo.sv" into library work
+INFO: [VRFC 10-311] analyzing module axis_fifo
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/batching_unit.sv" into library work
+INFO: [VRFC 10-311] analyzing module batching_unit
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/stream_sink.sv" into library work
+INFO: [VRFC 10-311] analyzing module stream_sink
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/latency_monitor.sv" into library work
+INFO: [VRFC 10-311] analyzing module latency_monitor
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/pcie_axi_dma_top.sv" into library work
+INFO: [VRFC 10-311] analyzing module pcie_axi_dma_top
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/verif/tb/tb_pcie_axi_dma.sv" into library work
+INFO: [VRFC 10-311] analyzing module tb_pcie_axi_dma
+touch /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/build_kv_scenario1_batching_fifo64/.compiled
+cd /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/build_kv_scenario1_batching_fifo64 && \
+xelab tb_pcie_axi_dma \
+    --snapshot tb_pcie_axi_dma_snap \
+    -generic_top "TB_SCENARIO=1" -generic_top "FIFO_DEPTH=64" -generic_top "BATCH_COUNT=4" -generic_top "BATCH_TIMEOUT=64" -generic_top "SINK_STALL_EN=0" -generic_top "SINK_STALL_PERIOD=4" -generic_top "SINK_STALL_READY=1" \
+    --timescale 1ns/1ps \
+    --debug typical \
+    -log xelab.log
+Vivado Simulator v2022.2
+Copyright 1986-1999, 2001-2022 Xilinx, Inc. All Rights Reserved.
+Running: /tools/Xilinx/Vivado/2022.2/bin/unwrapped/lnx64.o/xelab tb_pcie_axi_dma --snapshot tb_pcie_axi_dma_snap -generic_top TB_SCENARIO=1 -generic_top FIFO_DEPTH=64 -generic_top BATCH_COUNT=4 -generic_top BATCH_TIMEOUT=64 -generic_top SINK_STALL_EN=0 -generic_top SINK_STALL_PERIOD=4 -generic_top SINK_STALL_READY=1 --timescale 1ns/1ps --debug typical -log xelab.log 
+Multi-threading is on. Using 2 slave threads.
+Starting static elaboration
+Pass Through NonSizing Optimizer
+Completed static elaboration
+Starting simulation data flow analysis
+Completed simulation data flow analysis
+Time Resolution for simulation is 1ps
+Compiling package work.pcie_axi_pkg
+Compiling module work.pcie_model(DATA_WIDTH=64,PKT_SIZ...
+Compiling module work.dma_model(DATA_WIDTH=64,PKT_SIZE...
+Compiling module work.axi_mm2s_adapter(DATA_WIDTH=64,P...
+Compiling module work.axis_fifo(DATA_WIDTH=64,PKT_SIZE...
+Compiling module work.batching_unit(DATA_WIDTH=64,PKT_...
+Compiling module work.stream_sink(DATA_WIDTH=64,PKT_SI...
+Compiling module work.latency_monitor(PKT_ID_W=8,PKT_S...
+Compiling module work.pcie_axi_dma_top(DATA_WIDTH=64,P...
+Compiling module work.tb_pcie_axi_dma(TB_SCENARIO=1,FI...
+Built simulation snapshot tb_pcie_axi_dma_snap
+touch /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/build_kv_scenario1_batching_fifo64/.elaborated
+cd /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/build_kv_scenario1_batching_fifo64 && \
+xsim tb_pcie_axi_dma_snap \
+    --runall \
+    --log xsim_batch.log
+
+****** xsim v2022.2 (64-bit)
+  **** SW Build 3671981 on Fri Oct 14 04:59:54 MDT 2022
+  **** IP Build 3669848 on Fri Oct 14 08:30:02 MDT 2022
+    ** Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+
+source xsim.dir/tb_pcie_axi_dma_snap/xsim_script.tcl
+# xsim {tb_pcie_axi_dma_snap} -autoloadwcfg -runall
+Time resolution is 1 ps
+run -all
+[batching_unit] Batch mode  BATCH_COUNT=4  TIMEOUT=64
+
+[RESULT] ================================================================
+[RESULT]  PCIe-AXI DMA Latency Simulation  |  Config: BATCH=4,FIFO=64
+[RESULT] ================================================================
+[RESULT]  PKT_ID | SIZE (B) | LATENCY (cyc) | EFFICIENCY (B/cyc) | FIFO_PEAK | FULL?
+[RESULT] ----------------------------------------------------------------
+[RESULT]  Batching 4 × 64B packets into one frame
+[RESULT] ----------------------------------------------------------------
+[RESULT]  BATCH# | SIZE (B) | LATENCY (cyc) | EFFICIENCY (B/cyc) | FIFO_PEAK | FULL? | CONFIG
+[RESULT] ................................................................
+[dma_model] t=775000  pkt_id=0  descriptor setup done  (SETUP_CYCLES=8)
+[batmon]  t=865000  inner tlast suppressed  pkt_cnt=0→1  bytes_so_far=64
+[dma_model] t=1305000  pkt_id=1  descriptor setup done  (SETUP_CYCLES=8)
+[batmon]  t=1395000  inner tlast suppressed  pkt_cnt=1→2  bytes_so_far=128
+[dma_model] t=1835000  pkt_id=2  descriptor setup done  (SETUP_CYCLES=8)
+[batmon]  t=1925000  inner tlast suppressed  pkt_cnt=2→3  bytes_so_far=192
+[dma_model] t=2365000  pkt_id=3  descriptor setup done  (SETUP_CYCLES=8)
+[batmon]  t=2455000  batch CLOSED  pkts=4  total_bytes=256  first_id=0
+[sink]  t=2455000  pkt_id=0  size=256B  count=1
+[latmon] pkt_id=0  size= 256B  latency=  230 cyc  eff= 1.11 B/cyc
+[latmon]  ↳ batch 4×64B→256B: est_serial PCIe=208 DMA=64  total_measured=230
+[RESULT]       0 |      256 |           230 |               1.11 |         1 |    no | BATCH=4,FIFO=64
+[RESULT] ----------------------------------------------------------------
+[RESULT]  Total packets received: 1
+[RESULT] ================================================================
+
+
+[latmon] ╔══════════════════════════════════════════╗
+[latmon] ║        LATENCY MONITOR SUMMARY           ║
+[latmon] ╠══════════════════════════════════════════╣
+[latmon] ║  Packets measured :    1                 ║
+[latmon] ║  Min latency      :    230 cycles          ║
+[latmon] ║  Max latency      :    230 cycles          ║
+[latmon] ║  Avg latency      :    230.0 cycles        ║
+[latmon] ║  Total bytes      :      256 bytes           ║
+[latmon] ║  Avg efficiency   :  1.11 B/cyc         ║
+[latmon] ║  Eff throughput   :  111.3 MB/s (100MHz) ║
+[latmon] ╚══════════════════════════════════════════╝
+
+$finish called at time : 2755 ns : File "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/verif/tb/tb_pcie_axi_dma.sv" Line 412
+exit
+INFO: [Common 17-206] Exiting xsim at Sat Aug  1 16:38:09 2026...
+
+=== Batch simulation complete. Log: /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/build_kv_scenario1_batching_fifo64/xsim_batch.log ===

@@ -1,0 +1,53 @@
+% Chapter 8
+
+\chapter{Conclusions and Future Work}
+
+\label{Chapter8}
+
+\lhead{Chapter 8. \emph{Conclusions and Future Work}}
+
+\section{Conclusions}
+\label{sec:ch8_conclusions}
+
+This thesis set out to quantify, and partially mitigate, the disproportionately high per-byte latency that small packets incur when moved across a PCIe-AXI DMA streaming datapath. Starting from the observation that both PCIe transaction-layer processing and DMA descriptor handling impose a largely fixed, size-independent cost per transfer (\autoref{Chapter3}), a seven-stage, cycle-accurate SystemVerilog model of such a datapath was designed and implemented (\autoref{Chapter4}, \autoref{Chapter5}), instrumented with a hardware latency monitor that measures every packet's latency directly from simulated RTL signals rather than from a software proxy (\autoref{sec:ch4_latency_monitor}), and exercised with a directed testbench across packet sizes from 64~B to 4~KB and across three FIFO depths under two consumer models (\autoref{Chapter6}).
+
+The resulting measurements (\autoref{Chapter7}) confirm the thesis's central hypothesis quantitatively: baseline efficiency rises from 0.90~bytes/cycle at 64~B to 1.58~bytes/cycle at 4~KB (\autoref{tab:baseline_results}), and this behaviour is explained, to within a constant 3-cycle residual across every packet size tested, by the closed-form PCIe-plus-DMA latency model derived in \autoref{sec:ch3_latency_model} (\autoref{tab:breakdown}). A packet-batching unit designed specifically to amortise this fixed overhead across multiple small packets (\autoref{sec:ch5_batching}) was shown to reduce the total latency of transferring four 64~B packets from 284 cycles (sent independently) to 230 cycles (coalesced into one 256~B frame) -- a 19\% reduction, obtained by paying the fixed PCIe and DMA overhead once instead of four times (\autoref{sec:ch7_batching}). A complementary FIFO-depth sweep under a rate-limited consumer showed that buffer depth governs buffering headroom -- how much of a packet the FIFO can absorb before back-pressure engages -- but, once a fixed-rate consumer is the pipeline's bottleneck, does not itself change the steady-state completion latency of a single continuous transfer (\autoref{sec:ch7_fifo_stall}), a distinction that is easy to overlook when sizing DMA buffers from bandwidth specifications alone.
+
+\section{Research Contributions}
+\label{sec:ch8_contributions}
+
+The specific contributions of this thesis are:
+
+\begin{enumerate}
+    \item A closed-form, packet-size-parameterised latency model (Equations~\ref{eq:pcie_latency}--\ref{eq:total_latency}) for a PCIe transaction layer and a descriptor-based DMA engine, validated directly against cycle-accurate hardware measurements across a 64-fold range of packet sizes with a constant, fully-accounted-for residual.
+    \item An open, synthesisable, seven-stage SystemVerilog implementation of a PCIe-AXI DMA streaming pipeline (\texttt{pcie\_model}, \texttt{dma\_model}, \texttt{axi\_mm2s\_adapter}, \texttt{axis\_fifo}, \texttt{batching\_unit}, \texttt{stream\_sink}, \texttt{latency\_monitor}), together with a directed, self-checking testbench, that can be re-parameterised and re-simulated to study configurations beyond those reported in this thesis.
+    \item A hardware, in-design latency-measurement block that timestamps packet injection and completion events directly in RTL and decomposes every measured latency into its PCIe, DMA, and residual pipeline contributions, avoiding the software-side reference-point misalignment that produced a spurious constant offset in an earlier version of the testbench (\autoref{sec:ch6_milestones}).
+    \item A small-packet batching unit, implemented as a zero-buffering, online pass-through stage, with a measured 19\% latency reduction and $1.25\times$ efficiency improvement for a representative four-packet burst, demonstrated using the same RTL and testbench as the un-batched baseline so that the comparison isolates the effect of a single enable bit.
+    \item An experimental demonstration, using an always-ready and a rate-limited consumer model of the same FIFO, that clearly separates the buffering-headroom role of FIFO depth from its (in this workload, negligible) effect on steady-state single-flow completion latency.
+\end{enumerate}
+
+\section{Limitations}
+\label{sec:ch8_limitations}
+
+The present model and its evaluation have several limitations, acknowledged here so that the results of \autoref{Chapter7} are interpreted with the correct scope.
+
+\begin{itemize}
+    \item \textbf{Single packet in flight.} Both \texttt{pcie\_model} and \texttt{dma\_model} buffer and process one packet at a time (\autoref{sec:ch5_pcie_fsm}, \autoref{sec:ch5_dma_fsm}), matching the testbench's sequential injection pattern but not modelling pipelined, overlapping in-flight transactions, credit-based multi-outstanding-request behaviour, or PCIe multi-lane/multi-virtual-channel effects, all of which a production PCIe root complex or endpoint would exploit to improve small-packet throughput beyond what a single-packet-at-a-time model can show.
+    \item \textbf{Behavioural, not RTL-synthesised-and-timed, PCIe and DMA models.} \texttt{pcie\_model} and \texttt{dma\_model} are parameterised behavioural approximations of PCIe and DMA timing (\autoref{sec:ch3_pcie}, \autoref{sec:ch3_dma}), not a synthesised PCIe hard IP or a commercial DMA IP core such as \cite{xilinx2021axidma, xilinx2021pcieintblock}; their fixed and per-byte constants were chosen to be representative of typical Gen3-class timing rather than measured from a specific silicon implementation.
+    \item \textbf{Batching corner case.} As noted in \autoref{sec:ch5_batching}, the batching unit will not flush an incomplete final batch that is not followed by a further \texttt{tlast}; the testbench's batching scenario always injects a complete batch of \texttt{BATCH\_COUNT} packets, so this case is not exercised in this thesis's results, but it would need to be addressed (e.g. with an explicit external flush signal) before the unit could be deployed against an arbitrary, potentially bursty packet stream.
+    \item \textbf{One workload pattern per FIFO-depth experiment.} The FIFO-depth sweep of \autoref{sec:ch7_fifo} drives one continuous packet through the pipeline at a time; as discussed in \autoref{sec:ch7_fifo_stall}, this is precisely the workload pattern under which FIFO depth does not affect steady-state latency, and a bursty, multi-packet-in-flight traffic pattern would be needed to observe the buffering benefit that FIFO depth is, in general, provisioned for.
+    \item \textbf{No physical validation.} All results in this thesis are obtained from RTL simulation in Vivado \texttt{xsim} \cite{xilinx2022vivadosim}; no FPGA bring-up, hardware-in-the-loop measurement, or comparison against a real PCIe link's measured latency was performed.
+\end{itemize}
+
+\section{Scope for Future Work}
+\label{sec:ch8_future}
+
+Several extensions follow directly from the limitations above and from observations made during the analysis of \autoref{Chapter7}:
+
+\begin{enumerate}
+    \item \textbf{Multi-packet-in-flight modelling.} Extending \texttt{pcie\_model} and \texttt{dma\_model} to pipeline or overlap multiple in-flight packets, rather than processing one at a time, would allow the model to capture the throughput gains a real multi-outstanding-transaction PCIe link achieves and would be a prerequisite for studying burst/gapped traffic patterns under which FIFO depth is expected to affect latency directly (\autoref{sec:ch7_fifo_stall}).
+    \item \textbf{Bursty workload FIFO study.} Re-running the FIFO-depth sweep of \autoref{sec:ch7_fifo} under a workload of bursts separated by idle gaps, rather than one continuous transfer, would directly test the hypothesis raised in \autoref{sec:ch7_discussion} that FIFO depth's real benefit is letting the producer run ahead between bursts.
+    \item \textbf{Adaptive batching.} The present batching unit uses a fixed \texttt{BATCH\_COUNT} and \texttt{BATCH\_TIMEOUT} (\autoref{sec:ch5_batching}); an adaptive policy that adjusts these based on observed packet arrival rate could trade off the latency-per-packet cost of waiting to fill a batch against the throughput benefit of a larger one, and would need its own latency-vs-arrival-rate characterisation using the same measurement infrastructure built in this thesis.
+    \item \textbf{Validation against a commercial DMA/PCIe IP core.} Replacing the behavioural \texttt{pcie\_model} and \texttt{dma\_model} with a synthesised instance of a commercial core such as the AMD-Xilinx AXI DMA IP or UltraScale+ PCIe integrated block \cite{xilinx2021axidma, xilinx2021pcieintblock}, driven by the same testbench and latency monitor, would validate how closely this thesis's behavioural constants correspond to a real implementation's timing.
+    \item \textbf{Hardware bring-up.} Deploying the design on an FPGA connected to a real PCIe root complex and comparing host-measured round-trip latency against the simulated figures of \autoref{Chapter7} would close the loop between this thesis's simulation-only results and physically measured behaviour.
+\end{enumerate}

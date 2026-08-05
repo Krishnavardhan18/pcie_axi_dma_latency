@@ -1,0 +1,58 @@
+% Chapter 2
+
+\chapter{Literature Review}
+
+\label{Chapter2}
+
+\lhead{Chapter 2. \emph{Literature Review}}
+
+This chapter surveys the four bodies of work that this thesis draws on: PCIe protocol and performance characterisation, AXI-based DMA architectures, general overhead-amortisation techniques from systems and networking research, and RTL/queueing-based latency modeling of on-chip interconnects. \autoref{sec:ch2_gap} then distils the specific gap addressed by this thesis.
+
+%----------------------------------------------------------------------------------------
+
+\section{PCIe Protocol and Performance Characterisation}
+\label{sec:ch2_pcie}
+
+The \ac{PCIe} Base Specification \cite{pcisig2017base} defines a layered architecture -- transaction, data link, and physical layers -- in which application data is carried inside \acp{TLP}. Every \ac{TLP} carries a fixed-size header (typically 12--16 bytes for memory requests), is subject to credit-based flow control between the transmitter and receiver, and its delivery is acknowledged at the data-link layer. Budruk~et~al.~\cite{budruk2004pcie} provide a detailed treatment of this layering and of the round-trip credit and acknowledgement mechanisms that contribute fixed, size-independent latency to every transaction, independent of the physical-layer transfer rate.
+
+Empirical characterisation of this fixed-overhead behaviour on real systems is comparatively rare. Neugebauer~et~al.~\cite{neugebauer2018pcie} measured PCIe performance for end-host networking on commodity servers and found that for small DMA transfers -- the regime most relevant to packet-processing NICs -- throughput is dominated by the number of separate PCIe transactions issued rather than by the total byte count, and that batching multiple descriptors or payloads per transaction is necessary to approach link bandwidth. Their measurements were taken on production hardware and characterise a specific NIC/host combination as a black box; they do not provide a parameterised, per-stage RTL model of the datapath that isolates how much of the observed overhead originates in the PCIe transaction layer as opposed to the DMA engine's descriptor processing, nor a way to vary that split experimentally. This distinction motivates the module-level decomposition adopted in \autoref{Chapter4} of this thesis.
+
+%----------------------------------------------------------------------------------------
+
+\section{AXI-Based DMA Architectures}
+\label{sec:ch2_axi_dma}
+
+On the fabric side of a PCIe endpoint, the \ac{AMBA} \ac{AXI4} and \ac{AXI4-Stream} protocols \cite{arm2021axi, arm2010axistream} are the de facto standard for connecting a DMA engine to on-chip processing logic. AXI4 defines a memory-mapped, burst-oriented protocol with independent address and data channels, while AXI4-Stream strips away addressing entirely in favour of a simple, back-pressured (\texttt{tvalid}/\texttt{tready}) beat-by-beat handshake with sideband fields (\texttt{tlast}, \texttt{tkeep}, \texttt{tuser}, \texttt{tid}) that this thesis reuses directly to carry per-packet size and identity information through the pipeline (\autoref{sec:ch4_sideband}).
+
+Commercial DMA engines built on this protocol pair, such as the AMD-Xilinx AXI DMA \ac{IP} \cite{xilinx2021axidma} and the DMA/bridge logic integrated into the UltraScale+ PCIe endpoint block \cite{xilinx2021pcieintblock}, operate on a descriptor-ring model: the host (or an on-chip processor) writes a descriptor specifying source address, destination address, and length to a ring buffer in memory, then signals the engine via a doorbell register or interrupt. The engine must fetch and parse this descriptor -- itself a memory or PCIe transaction with its own round-trip latency -- before it can begin moving the payload described by it. Product-guide documentation for these cores \cite{xilinx2021axidma, xilinx2021pcieintblock} specifies register maps, supported burst lengths, and peak throughput figures, but treats descriptor-fetch latency as an implementation detail rather than a quantity to be modeled as a function of transfer size. This thesis's \texttt{dma\_model} (\autoref{sec:ch4_dma_model}) makes that fixed descriptor-processing cost an explicit, parameterised quantity (\texttt{SETUP\_CYCLES}) precisely so that its contribution to small-packet latency can be isolated and measured.
+
+%----------------------------------------------------------------------------------------
+
+\section{Overhead Amortisation and Batching Techniques}
+\label{sec:ch2_batching}
+
+The general principle exploited by the batching unit designed in this thesis -- that many small, fixed-overhead events can be made more efficient by coalescing them into fewer, larger ones -- has a long history in systems and networking research, although it has typically been applied in software or at the interrupt level rather than inside an RTL DMA datapath. Mogul and Ramakrishnan~\cite{mogul1997livelock} showed that under high packet-arrival rates, servicing every received network packet with an individual interrupt causes receive livelock, and that polling combined with interrupt coalescing (servicing multiple packets per interrupt) restores throughput by amortising the fixed per-interrupt processing cost across many packets. Commodity network interface controllers subsequently exposed hardware interrupt-moderation timers for exactly this purpose \cite{intel2003moderation}, deliberately delaying interrupt generation until either a timeout expires or a configurable number of packets have arrived, trading a small amount of added latency per packet for a large reduction in per-packet fixed overhead.
+
+These techniques operate at the boundary between hardware and the host operating system, coalescing \emph{interrupts} rather than the underlying \emph{data transfers} themselves. The idea of applying the same amortisation principle one layer lower -- coalescing multiple small AXI-Stream packets into a single larger frame before they reach the PCIe/DMA stages that impose the fixed overhead, and measuring the resulting improvement directly in RTL simulation -- is the specific mechanism this thesis implements (the \texttt{batching\_unit} of \autoref{sec:ch4_batching_unit}) and evaluates quantitatively (\autoref{sec:ch7_batching}).
+
+%----------------------------------------------------------------------------------------
+
+\section{Latency Modeling of Interconnects}
+\label{sec:ch2_latency_modeling}
+
+Analytically, the behaviour this thesis is concerned with -- a service time made up of a fixed component plus a component proportional to the size of the job being served -- is a standard construction in queueing theory. Kleinrock's treatment of queueing systems \cite{kleinrock1975queueing} formalises service-time models of exactly this fixed-plus-proportional form and their consequences for waiting time and utilisation, and provides the conceptual basis for the closed-form PCIe and DMA delay expressions derived in \autoref{sec:ch3_latency_model}. However, classical queueing analysis models the service discipline abstractly; it does not, by itself, validate whether a specific RTL implementation of a specific protocol actually exhibits the assumed fixed-plus-proportional behaviour, or by how much a specific mitigation (such as batching) improves it for a specific packet-size distribution. Closing that gap between an analytical model and a cycle-accurate, simulatable hardware implementation -- built using standard SystemVerilog RTL practice \cite{ieee2017systemverilog} and simulated with an industrial simulator \cite{xilinx2022vivadosim} -- is the methodological contribution of this thesis.
+
+%----------------------------------------------------------------------------------------
+
+\section{Research Gap}
+\label{sec:ch2_gap}
+
+Synthesising the four areas above, three gaps recur:
+
+\begin{enumerate}
+    \item \textbf{No open, parameterised, per-stage latency model.} PCIe performance studies \cite{neugebauer2018pcie} characterise small-transfer inefficiency empirically on commodity hardware, but as a single opaque number rather than a model that separately attributes latency to the PCIe transaction layer versus the DMA descriptor-processing stage. Vendor IP documentation \cite{xilinx2021axidma, xilinx2021pcieintblock} specifies the mechanisms that create this overhead (TLP framing, descriptor fetch) but does not quantify it as a function of packet size.
+    \item \textbf{No RTL-level application of batching to PCIe-AXI DMA transfers.} The coalescing principle is well established for network interrupts \cite{mogul1997livelock, intel2003moderation}, but its direct application inside an AXI-Stream DMA pipeline -- merging multiple small packets into one larger frame ahead of the PCIe/DMA overhead, and measuring the resulting cycle-level latency change -- does not appear in the surveyed literature or vendor documentation.
+    \item \textbf{No validated link between the analytical (queueing-style) model and a cycle-accurate hardware measurement.} Fixed-plus-proportional service models are standard in queueing theory \cite{kleinrock1975queueing}, but confirming that a real PCIe-AXI DMA RTL pipeline actually behaves this way, and by how much a mitigation such as batching improves it, requires an instrumented, simulatable implementation that does not currently exist in the reviewed sources.
+\end{enumerate}
+
+This thesis addresses all three gaps together: \autoref{Chapter3} and \autoref{Chapter4} derive and implement a per-stage, packet-size-parameterised latency model of a PCIe-AXI DMA pipeline; \autoref{Chapter5} implements a batching unit as a direct RTL application of the coalescing principle; and \autoref{Chapter6} and \autoref{Chapter7} validate the model against, and quantify the batching improvement using, cycle-accurate measurements taken from a hardware latency monitor embedded in the simulated design itself.

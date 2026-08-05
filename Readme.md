@@ -248,3 +248,31 @@ Note on latency_monitor output: The monitor shows misleading efficiency (0.28 B/
 
 batching_unit.sv — online pass-through FSM with pkt_cnt, batch_bytes, first_id, idle_cnt, flush_pending; tlast suppression and m_tuser/m_tid transformation
 tb_pcie_axi_dma.sv — TB_SCENARIO=1 branch injects BATCH_COUNT×64B back-to-back and waits for a single batch completion
+
+Bug 1 — Wrong efficiency in batching mode (critical)
+Root cause: latency_monitor stored inject sizes per-packet (64 B each). When the batch fired its single pkt_done, the monitor looked up size_store[0] = 64 B instead of the actual 256 B batch total.
+
+Fix: Added done_size signal from stream_sink → latency_monitor. The sink captures s_tuser at the closing tlast — which batching_unit already sets to the total accumulated batch bytes. All efficiency, throughput, and summary stats now use this batch-aware value.
+
+Old output: size=64B  eff=0.28 B/cyc (wrong), New: size=256B  eff=1.10 B/cyc (correct)
+
+Bug 2 — Constant +2 cycle offset in [RESULT] rows
+Root cause: The TB captured inject_cyc = tb_cycle one clock before pkt_inject fired in hardware, causing a systematic 2-cycle over-measurement.
+
+Fix: The [RESULT] rows now read latency_out directly from the hardware latency_monitor (already exported at the DUT top-level). The TB waits one extra @(posedge clk) for latency_valid to assert after pkt_count changes, then uses latency_out. This makes [RESULT] and [latmon] rows show identical numbers.
+
+Bug 3 — Misleading breakdown in batch mode
+Fix: The breakdown estimator now detects batching (done_size ≠ size_store[done_id]) and prints the correct serial PCIe+DMA model for N×S packets instead of the single-packet formula that produced nonsensical other=162 overhead.
+
+All 5 runs passed and are logged under pcie_axi_dma_latency/scripts/sim_logs/:
+
+run1_scenario0_baseline_fifo64.log — TB_SCENARIO=0 (bypass mode)
+run_scenario1_batching_fifo64.log — TB_SCENARIO=1 (batching_unit active, non-bypass — this is the case you flagged)
+run_scenario2_fifo16/64/256.log — FIFO depth sweep
+summary_comparison.log — the aggregated comparison
+Key findings (full detail in summary_comparison.log):
+
+Config	64B	128B	256B	512B	1KB	4KB
+Baseline (bypass, any FIFO depth)	71	111	191	351	671	2591 cyc
+Batching (4×64B → 1 frame)	230 cyc for the whole batch (vs 284 if sent as 4 separate 71-cyc packets) → ~19% latency reduction					
+FIFO_DEPTH (16/64/256) made zero difference — the testbench only ever has one packet in flight at a time, so FIFO depth never becomes a bottleneck; a real sweep would need back-to-back/bursty injection to show up.

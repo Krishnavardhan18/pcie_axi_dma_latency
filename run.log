@@ -1,0 +1,94 @@
+[batching_unit] Bypass mode (enable=0)
+
+[RESULT] ================================================================
+[RESULT]  PCIe-AXI DMA Latency Simulation  |  Config: BASELINE,FIFO=64
+[RESULT] ================================================================
+[RESULT]  PKT_ID | SIZE (B) | LATENCY (cyc) | EFFICIENCY (B/cyc)
+[RESULT] ----------------------------------------------------------------
+[dma_model] t=775000  pkt_id=0  descriptor setup done  (SETUP_CYCLES=8)
+[sink]  t=865000  pkt_id=0  size=64B  count=1
+[RESULT]       0 |       64 |            73 |               0.88 | BASELINE,FIFO=64
+[latmon] pkt_id=0  size=  64B  latency=   71 cyc  eff= 0.90 B/cyc
+[latmon]  ↳ est: PCIe=44  DMA=24  other=3  total_measured=71
+[dma_model] t=1905000  pkt_id=1  descriptor setup done  (SETUP_CYCLES=8)
+[sink]  t=2075000  pkt_id=1  size=128B  count=2
+[RESULT]       1 |      128 |           113 |               1.13 | BASELINE,FIFO=64
+[latmon] pkt_id=1  size= 128B  latency=  111 cyc  eff= 1.15 B/cyc
+[latmon]  ↳ est: PCIe=68  DMA=40  other=3  total_measured=111
+[dma_model] t=3755000  pkt_id=2  descriptor setup done  (SETUP_CYCLES=8)
+[sink]  t=4085000  pkt_id=2  size=256B  count=3
+[RESULT]       2 |      256 |           193 |               1.33 | BASELINE,FIFO=64
+[latmon] pkt_id=2  size= 256B  latency=  191 cyc  eff= 1.34 B/cyc
+[latmon]  ↳ est: PCIe=116  DMA=72  other=3  total_measured=191
+[dma_model] t=7045000  pkt_id=3  descriptor setup done  (SETUP_CYCLES=8)
+[sink]  t=7695000  pkt_id=3  size=512B  count=4
+[RESULT]       3 |      512 |           353 |               1.45 | BASELINE,FIFO=64
+[latmon] pkt_id=3  size= 512B  latency=  351 cyc  eff= 1.46 B/cyc
+[latmon]  ↳ est: PCIe=212  DMA=136  other=3  total_measured=351
+[dma_model] t=13215000  pkt_id=4  descriptor setup done  (SETUP_CYCLES=8)
+[sink]  t=14505000  pkt_id=4  size=1024B  count=5
+[RESULT]       4 |     1024 |           673 |               1.52 | BASELINE,FIFO=64
+[latmon] pkt_id=4  size=1024B  latency=  671 cyc  eff= 1.53 B/cyc
+[latmon]  ↳ est: PCIe=404  DMA=264  other=3  total_measured=671
+[dma_model] t=35385000  pkt_id=5  descriptor setup done  (SETUP_CYCLES=8)
+[sink]  t=40515000  pkt_id=5  size=4096B  count=6
+[RESULT]       5 |     4096 |          2593 |               1.58 | BASELINE,FIFO=64
+[latmon] pkt_id=5  size=4096B  latency= 2591 cyc  eff= 1.58 B/cyc
+[latmon]  ↳ est: PCIe=1556  DMA=1032  other=3  total_measured=2591
+[RESULT] ----------------------------------------------------------------
+[RESULT]  Total packets received: 6
+[RESULT] ================================================================
+
+
+[latmon] ╔══════════════════════════════════════════╗
+[latmon] ║        LATENCY MONITOR SUMMARY           ║
+[latmon] ╠══════════════════════════════════════════╣
+[latmon] ║  Packets measured :    6                 ║
+[latmon] ║  Min latency      :     71 cycles          ║
+[latmon] ║  Max latency      :   2591 cycles          ║
+[latmon] ║  Avg latency      :    664.3 cycles        ║
+[latmon] ║  Total bytes      :     6080 bytes           ║
+[latmon] ║  Avg efficiency   :  1.53 B/cyc         ║
+[latmon] ║  Eff throughput   :  152.5 MB/s (100MHz) ║
+[latmon] ╚══════════════════════════════════════════╝
+
+
+[batching_unit] Batch mode  BATCH_COUNT=4  TIMEOUT=64
+
+[RESULT] ================================================================
+[RESULT]  PCIe-AXI DMA Latency Simulation  |  Config: BATCH=4,FIFO=64
+[RESULT] ================================================================
+[RESULT]  PKT_ID | SIZE (B) | LATENCY (cyc) | EFFICIENCY (B/cyc)
+[RESULT] ----------------------------------------------------------------
+[RESULT]  Batching 4 × 64B packets into one frame
+[RESULT] ----------------------------------------------------------------
+[RESULT]  BATCH# | SIZE (B) | LATENCY (cyc) | EFFICIENCY (B/cyc) | CONFIG
+[RESULT] ................................................................
+[dma_model] t=775000  pkt_id=0  descriptor setup done  (SETUP_CYCLES=8)
+[batmon]  t=865000  inner tlast suppressed  pkt_cnt=0→1  bytes_so_far=64
+[dma_model] t=1305000  pkt_id=1  descriptor setup done  (SETUP_CYCLES=8)
+[batmon]  t=1395000  inner tlast suppressed  pkt_cnt=1→2  bytes_so_far=128
+[dma_model] t=1835000  pkt_id=2  descriptor setup done  (SETUP_CYCLES=8)
+[batmon]  t=1925000  inner tlast suppressed  pkt_cnt=2→3  bytes_so_far=192
+[dma_model] t=2365000  pkt_id=3  descriptor setup done  (SETUP_CYCLES=8)
+[batmon]  t=2455000  batch CLOSED  pkts=4  total_bytes=256  first_id=0
+[sink]  t=2455000  pkt_id=0  size=256B  count=1
+[RESULT]       0 |      256 |           232 |               1.10 | BATCH=4,FIFO=64
+[latmon] pkt_id=0  size=  64B  latency=  230 cyc  eff= 0.28 B/cyc
+[latmon]  ↳ est: PCIe=44  DMA=24  other=162  total_measured=230
+[RESULT] ----------------------------------------------------------------
+[RESULT]  Total packets received: 1
+[RESULT] ================================================================
+
+
+[latmon] ╔══════════════════════════════════════════╗
+[latmon] ║        LATENCY MONITOR SUMMARY           ║
+[latmon] ╠══════════════════════════════════════════╣
+[latmon] ║  Packets measured :    1                 ║
+[latmon] ║  Min latency      :    230 cycles          ║
+[latmon] ║  Max latency      :    230 cycles          ║
+[latmon] ║  Avg latency      :    230.0 cycles        ║
+[latmon] ║  Total bytes      :       64 bytes           ║
+[latmon] ║  Avg efficiency   :  0.28 B/cyc         ║
+[latmon] ║  Eff throughput   :   27.8 MB/s (100MHz) ║
+[latmon] ╚══════════════════════════════════════════╝

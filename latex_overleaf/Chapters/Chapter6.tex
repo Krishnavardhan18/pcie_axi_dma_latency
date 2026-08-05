@@ -1,0 +1,84 @@
+% Chapter 6
+
+\chapter{Experimental Setup and Work Completed}
+
+\label{Chapter6}
+
+\lhead{Chapter 6. \emph{Experimental Setup and Work Completed}}
+
+This chapter describes the simulation environment used to exercise the architecture of \autoref{Chapter4}, the testbench that drives and measures it, and a chronological account of the verification milestones -- including two measurement-methodology bugs discovered and fixed during development -- that led to the results reported in \autoref{Chapter7}.
+
+%----------------------------------------------------------------------------------------
+
+\section{Simulation Environment}
+\label{sec:ch6_simenv}
+
+All RTL is compiled, elaborated, and simulated with the AMD-Xilinx Vivado \texttt{xsim} logic simulator \cite{xilinx2022vivadosim}, driven through a project \texttt{Makefile} rather than the Vivado GUI, so that every configuration used in this thesis is reproducible from a single command line. The flow has three stages, matching the standard \texttt{xsim} toolchain:
+
+\begin{enumerate}
+    \item \textbf{Compile} (\texttt{xvlog --sv}) -- all nine SystemVerilog sources (\texttt{pcie\_axi\_pkg.sv} through \texttt{pcie\_axi\_dma\_top.sv}, plus the testbench) are compiled incrementally into a shared work library.
+    \item \textbf{Elaborate} (\texttt{xelab}) -- the testbench top-level is elaborated into a named snapshot, with every scenario/configuration parameter (\autoref{sec:ch6_testbench}) passed as a \texttt{-generic\_top} override so that no RTL edit is required to change a run's configuration.
+    \item \textbf{Simulate} (\texttt{xsim ---runall}) -- the snapshot is run to completion in batch mode (or, for waveform debugging, under the \texttt{xsim} GUI with a saved waveform database).
+    \end{enumerate}
+
+The \texttt{Makefile} tracks compilation and elaboration with file-timestamp sentinels, and additionally fingerprints the exact generics string used for the previous elaboration; this second check exists because \texttt{xelab}'s snapshot is otherwise silently reused across a plain \texttt{make sim} invocation with different generics, which would cause a scenario or parameter sweep to report stale results from the previous configuration without any warning. Targets are provided for a single run (\texttt{make sim TB\_SCENARIO=\ldots}), a FIFO-depth sweep under an always-ready sink (\texttt{make fifo-sweep}), the same sweep under a rate-limited sink (\texttt{make fifo-sweep-stall}), and a full regression that executes every scenario used in this thesis and collects all \texttt{[RESULT]} rows into a single log (\texttt{make sim-all}).
+
+%----------------------------------------------------------------------------------------
+
+\section{Testbench Architecture}
+\label{sec:ch6_testbench}
+
+The testbench, \texttt{tb\_pcie\_axi\_dma}, instantiates \texttt{pcie\_axi\_dma\_top} (\autoref{sec:ch4_top}), generates a 100~MHz clock, and drives one of three scenarios selected by the \texttt{TB\_SCENARIO} parameter, summarised in \autoref{tab:tb_scenarios}.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}clp{7.2cm}@{}}
+\toprule
+\textbf{TB\_SCENARIO} & \textbf{Name} & \textbf{Description} \\
+\midrule
+0 & Baseline    & Batching disabled; one packet of each of six sizes (64~B, 128~B, 256~B, 512~B, 1~KB, 4~KB) is injected in turn and its latency measured (\autoref{sec:ch7_baseline}). \\
+1 & Batching    & Batching enabled; \texttt{BATCH\_COUNT} (default 4) $\times$ 64~B packets are injected back-to-back and the latency of the single resulting coalesced frame is measured (\autoref{sec:ch7_batching}). \\
+2 & FIFO sweep  & Batching disabled, identical to Scenario~0's packet-size loop, but intended to be re-run at \texttt{FIFO\_DEPTH} $\in \{16, 64, 256\}$, optionally with the sink stall model enabled, to study buffering behaviour (\autoref{sec:ch7_fifo}). \\
+\bottomrule
+\end{tabular}
+\caption{Testbench scenarios selected via the \texttt{TB\_SCENARIO} elaboration-time parameter.}
+\label{tab:tb_scenarios}
+\end{table}
+
+For Scenarios 0 and 2, the main test loop drives each packet size in turn via a \texttt{send\_packet} task, waits for the pipeline's \texttt{pkt\_count} output to increment (indicating \texttt{stream\_sink} has accepted that packet's final beat), waits one further clock edge for the hardware latency monitor to register \texttt{latency\_out} (\autoref{sec:ch4_latency_monitor}), and then prints a \texttt{[RESULT]} row giving the packet ID, size, measured latency, computed efficiency (Equation~\ref{eq:efficiency}), the peak FIFO occupancy observed during that packet's transit, and whether the FIFO was ever observed full. Scenario~1 differs only in that it injects \texttt{BATCH\_COUNT} packets before waiting for a single completion event, since the batching unit (\autoref{sec:ch5_batching}) coalesces them into one frame. A global watchdog (a plain \texttt{initial} block with a fixed time limit) terminates the simulation and reports an error if any packet fails to complete within a generous margin of its worst-case expected latency, so a regression run cannot hang silently.
+
+\subsection{The \texttt{send\_packet} Handshake and Its Correction}
+\label{sec:ch6_send_packet}
+
+The \texttt{send\_packet} task drives every beat of one packet's \texttt{gen\_*} inputs and must correctly detect, on the final beat, that \texttt{pcie\_model} (\autoref{sec:ch5_pcie_fsm}) has accepted it before de-asserting \texttt{gen\_tvalid}. The subtlety is that \texttt{pcie\_model}'s \texttt{s\_tready} is combinationally derived from its current state (\texttt{state == S\_RECV}), and that state only transitions to \texttt{S\_DELAY} \emph{after} the active simulation region in which the final beat's acceptance is decided. An earlier version of this task polled \texttt{gen\_tready} using \texttt{while (!gen\_tready) @(posedge clk);}, which sampled \texttt{gen\_tready} \emph{after} the non-blocking state update had already taken effect for that edge and therefore observed \texttt{s\_tready} having already dropped for the packet's own final beat, causing the task to hang waiting for an acceptance that had, in fact, already occurred. The fix -- checking \texttt{gen\_tready} inside a \texttt{do \ldots\ @(posedge clk); end while} construct, so the check happens in the active (pre-non-blocking-assignment) region for every beat, including the last -- resolved this and is the form of the task used for every result reported in this thesis.
+
+%----------------------------------------------------------------------------------------
+
+\section{Verification Milestones and Bugs Found}
+\label{sec:ch6_milestones}
+
+The pipeline was brought up and verified incrementally, stage by stage, following the design methodology of \autoref{sec:ch5_methodology}. \autoref{tab:milestones} summarises the sequence of milestones and the issues resolved at each stage.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}p{2.6cm}p{9.7cm}@{}}
+\toprule
+\textbf{Milestone} & \textbf{Outcome} \\
+\midrule
+Architecture \& stubs & Package, top-level wiring, and stub modules with safe default outputs elaborate and \texttt{\$finish} cleanly, giving a green baseline for incremental development. \\
+\texttt{pcie\_model} & Three-state FSM implemented and its computed delay cross-checked by hand against Equation~\ref{eq:pcie_latency} for all six test packet sizes. \\
+\texttt{dma\_model} & Three-state FSM implemented; descriptor-setup overhead fraction computed for 64~B/512~B/4~KB packets (50\%, 11\%, and 1.5\% of total DMA-stage cycles respectively), directly motivating the batching experiment of \autoref{sec:ch7_batching}. \\
+\texttt{axi\_mm2s\_adapter}, \texttt{axis\_fifo} & Zero-latency \texttt{tkeep} correction and FWFT FIFO implemented and unit-checked against hand-computed \texttt{tkeep} masks for packet sizes not aligned to the bus width. \\
+\texttt{stream\_sink} \& first end-to-end run & First complete pipeline run (bypass mode, \texttt{FIFO\_DEPTH=64}) produced a full latency/efficiency table across all six packet sizes; the \texttt{send\_packet} handshake bug of \autoref{sec:ch6_send_packet} was found and fixed at this stage, since it only manifests once a real multi-stage DUT can actually assert back-pressure on the last beat. \\
+\texttt{latency\_monitor} & Hardware latency monitor added; its measurements agreed with the testbench's own figures to within a constant $\pm 2$ cycles, which was traced to the testbench sampling its reference point one cycle before the corresponding hardware event (\autoref{sec:ch5_latmon_impl}) and fixed by making \texttt{[RESULT]} rows read \texttt{latency\_out} directly. \\
+\texttt{batching\_unit} & Batching FSM verified directly against its simulation diagnostics: three intermediate \texttt{tlast} pulses correctly suppressed, the fourth correctly closing the batch with the expected accumulated byte count and first-packet tag, and inter-packet gaps confirmed to remain below \texttt{BATCH\_TIMEOUT} so no spurious flush occurred. \\
+Batch-mode efficiency bug & The latency monitor initially reported batch efficiency using each packet's \emph{individual} injected size (64~B) rather than the completed frame's true size (256~B), understating efficiency by $4\times$; fixed by routing \texttt{stream\_sink}'s batch-aware \texttt{done\_size} into the efficiency calculation instead of the per-injection \texttt{size\_store} table (\autoref{sec:ch5_latmon_impl}). \\
+\texttt{stream\_sink} stall-model bug & Adding the optional consumer back-pressure model (needed for the FIFO-depth experiment of \autoref{sec:ch7_fifo_stall}) exposed a latent correctness bug: \texttt{pkt\_done} had been qualified only on \texttt{(s\_tvalid \&\& s\_tlast)}, which is a valid "beat transferred" check only when \texttt{s\_tready} is permanently 1. Under the stall model, \texttt{tvalid}/\texttt{tlast} can remain asserted for several cycles while waiting for \texttt{tready}, so the old check fired \texttt{pkt\_done} once per waiting cycle instead of once per actual transfer, quadrupling the reported \texttt{pkt\_count}. Fixed by correctly gating on \texttt{(s\_tvalid \&\& s\_tready \&\& s\_tlast)}. \\
+\texttt{fifo\_occupancy} width bug & The top-level \texttt{fifo\_occupancy} output port was sized from the package default \texttt{FIFO\_DEPTH} (64) rather than the actual \texttt{FIFO\_DEPTH} parameter passed to that instance, silently truncating the reported occupancy for \texttt{FIFO\_DEPTH=256} runs. Fixed by sizing the port from \texttt{\$clog2(FIFO\_DEPTH)} using the instance's own parameter. \\
+\bottomrule
+\end{tabular}
+\caption{Verification milestones completed during development, in chronological order, with the issues found and corrected at each stage.}
+\label{tab:milestones}
+\end{table}
+
+By the end of this sequence, eight regression runs -- the baseline (Scenario~0), the batching experiment (Scenario~1), the FIFO-depth sweep at three depths under an always-ready sink, and the same sweep at three depths under the rate-limited stall model -- all completed without a simulation timeout, an assertion failure, or a watchdog firing, and are the runs analysed in \autoref{Chapter7}.

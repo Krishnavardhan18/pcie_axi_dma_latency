@@ -10,19 +10,22 @@
 //
 // PACKET SIZES TESTED: 64 B, 128 B, 256 B, 512 B, 1 KB, 4 KB
 //
-// LATENCY MEASUREMENT (Steps 5 & 6)
-//   Step 5 (this step): TB measures latency directly using tb_cycle counter:
-//     inject_cyc = tb_cycle when gen_tvalid first presented to pcie_model
-//     done_cyc   = tb_cycle when pkt_count increments (stream_sink accepted tlast)
-//     latency    = done_cyc - inject_cyc
-//   Step 6: latency_monitor takes over (same numbers, with per-stage breakdown)
+// LATENCY MEASUREMENT
+//   All latency values in [RESULT] rows come from the hardware latency_monitor
+//   (latency_out), not from a software tb_cycle difference.  This eliminates
+//   the constant 2-cycle offset that arose from TB-side reference-point
+//   misalignment, and ensures [RESULT] and [latmon] display identical numbers.
+//
+//   Flow:
+//     1. pkt_inject pulse → latency_monitor records inject_time
+//     2. TB waits for pkt_count to change (stream_sink accepted tlast)
+//     3. TB waits one additional posedge for latency_valid to assert
+//     4. TB reads latency_out and prints [RESULT]
 //
 // TIMING CONVENTION
 //   All signal drives happen at #1 after posedge (setup margin).
 //   gen_tready is sampled at @(posedge clk) BEFORE the #1 delay (pre-NBA
 //   active region) — this is the correct AXI-S handshake check point.
-//   Measured latency has a constant ±2 cycle offset vs true latency;
-//   this is negligible for the thesis trend analysis.
 //
 // OUTPUT FORMAT
 //   [RESULT]  PKT_ID | SIZE (B) | LATENCY (cyc) | EFFICIENCY (B/cyc) | CONFIG
@@ -43,6 +46,14 @@ module tb_pcie_axi_dma;
   parameter int  BATCH_COUNT   = pcie_axi_pkg::BATCH_COUNT_DEFAULT;
   parameter int  BATCH_TIMEOUT = pcie_axi_pkg::BATCH_TIMEOUT_DEFAULT;
   parameter bit  BATCHING_EN   = (TB_SCENARIO == 1);
+
+  // Consumer back-pressure model — must be enabled for FIFO_DEPTH to have
+  // any effect on latency (an always-ready sink never lets the FIFO fill).
+  // Off by default so scenarios 0/1 and the un-stalled scenario 2 sweep are
+  // unaffected. Override with SINK_STALL_EN=1 for the real depth-sweep run.
+  parameter bit  SINK_STALL_EN     = pcie_axi_pkg::SINK_STALL_EN_DEFAULT;
+  parameter int  SINK_STALL_PERIOD = pcie_axi_pkg::SINK_STALL_PERIOD_DEFAULT;
+  parameter int  SINK_STALL_READY  = pcie_axi_pkg::SINK_STALL_READY_DEFAULT;
 
   // ---------------------------------------------------------------------------
   // Clock & reset
@@ -82,7 +93,7 @@ module tb_pcie_axi_dma;
   logic [IDW-1:0]    latency_id;
 
   logic [31:0]       pkt_count;
-  logic [$clog2(pcie_axi_pkg::FIFO_DEPTH_DEFAULT):0] fifo_occupancy;
+  logic [$clog2(FIFO_DEPTH):0] fifo_occupancy;   // sized to actual FIFO_DEPTH, not the package default
   logic              fifo_full;
   logic              fifo_empty;
 
@@ -90,13 +101,16 @@ module tb_pcie_axi_dma;
   // DUT
   // ---------------------------------------------------------------------------
   pcie_axi_dma_top #(
-    .DATA_WIDTH    (DW),
-    .PKT_SIZE_W    (PSW),
-    .PKT_ID_W      (IDW),
-    .FIFO_DEPTH    (FIFO_DEPTH),
-    .BATCH_COUNT   (BATCH_COUNT),
-    .BATCH_TIMEOUT (BATCH_TIMEOUT),
-    .BATCHING_EN   (BATCHING_EN)
+    .DATA_WIDTH      (DW),
+    .PKT_SIZE_W      (PSW),
+    .PKT_ID_W        (IDW),
+    .FIFO_DEPTH      (FIFO_DEPTH),
+    .BATCH_COUNT     (BATCH_COUNT),
+    .BATCH_TIMEOUT   (BATCH_TIMEOUT),
+    .BATCHING_EN     (BATCHING_EN),
+    .SINK_STALL_EN     (SINK_STALL_EN),
+    .SINK_STALL_PERIOD (SINK_STALL_PERIOD),
+    .SINK_STALL_READY  (SINK_STALL_READY)
   ) dut (
     .clk           (clk),
     .rst_n         (rst_n),
@@ -145,11 +159,35 @@ module tb_pcie_axi_dma;
   // Config string (printed in each result row)
   // ---------------------------------------------------------------------------
   function automatic string cfg_string();
+    string base;
     if (BATCHING_EN)
-      return $sformatf("BATCH=%0d,FIFO=%0d", BATCH_COUNT, FIFO_DEPTH);
+      base = $sformatf("BATCH=%0d,FIFO=%0d", BATCH_COUNT, FIFO_DEPTH);
     else
-      return $sformatf("BASELINE,FIFO=%0d", FIFO_DEPTH);
+      base = $sformatf("BASELINE,FIFO=%0d", FIFO_DEPTH);
+    if (SINK_STALL_EN)
+      base = $sformatf("%s,STALL=%0d/%0d", base, SINK_STALL_READY, SINK_STALL_PERIOD);
+    return base;
   endfunction
+
+  // ---------------------------------------------------------------------------
+  // FIFO stress tracking — peak occupancy and whether fifo_full was ever
+  // asserted during the window between two reset points (set by the caller
+  // right before injecting the packet(s) being measured). Only meaningful
+  // when SINK_STALL_EN=1; with an always-ready sink these will always read
+  // back near-zero / never-full regardless of FIFO_DEPTH (see stream_sink.sv).
+  // ---------------------------------------------------------------------------
+  logic [$clog2(FIFO_DEPTH):0] peak_occ;
+  logic                        fifo_full_seen;
+
+  always @(posedge clk) begin
+    if (fifo_occupancy > peak_occ) peak_occ = fifo_occupancy;
+    if (fifo_full)                 fifo_full_seen = 1'b1;
+  end
+
+  task automatic reset_occ_tracking();
+    peak_occ       = '0;
+    fifo_full_seen = 1'b0;
+  endtask
 
   // ===========================================================================
   // Task: send_packet
@@ -221,9 +259,6 @@ module tb_pcie_axi_dma;
   // ===========================================================================
   // Module-level variables for the main test loop
   // ===========================================================================
-  int inject_cyc;
-  int done_cyc;
-  int measured_lat;
   int prev_count;
   int timeout_cnt;
 
@@ -254,7 +289,7 @@ module tb_pcie_axi_dma;
     $display("[RESULT] ================================================================");
     $display("[RESULT]  PCIe-AXI DMA Latency Simulation  |  Config: %s", cfg_string());
     $display("[RESULT] ================================================================");
-    $display("[RESULT]  PKT_ID | SIZE (B) | LATENCY (cyc) | EFFICIENCY (B/cyc)");
+    $display("[RESULT]  PKT_ID | SIZE (B) | LATENCY (cyc) | EFFICIENCY (B/cyc) | FIFO_PEAK | FULL?");
     $display("[RESULT] ----------------------------------------------------------------");
 
     // ====================================================================
@@ -266,13 +301,11 @@ module tb_pcie_axi_dma;
 
       for (int i = 0; i < 6; i++) begin
 
-        // Record inject cycle BEFORE driving gen_tvalid.
-        // One cycle early vs. true first-beat acceptance; error is constant
-        // across all packets so trends are accurate.
-        inject_cyc = tb_cycle;
         prev_count = pkt_count;
+        reset_occ_tracking();
 
-        // Drive the packet into the pipeline
+        // Drive the packet into the pipeline.
+        // pkt_inject fires inside send_packet; latency_monitor latches inject_time.
         send_packet(i, pkt_sizes[i]);
 
         // ----------------------------------------------------------------
@@ -290,17 +323,19 @@ module tb_pcie_axi_dma;
           $finish;
         end
 
-        // Record completion cycle (tb_cycle incremented at the posedge where
-        // pkt_count changed — exact cycle stream_sink saw tlast)
-        done_cyc     = tb_cycle;
-        measured_lat = done_cyc - inject_cyc;
+        // Wait one more posedge: latency_monitor registers latency_out one cycle
+        // after pkt_done (which itself is one cycle after stream_sink sees tlast).
+        @(posedge clk);
 
-        // Print result row
-        $display("[RESULT]  %6d | %8d | %13d | %18.2f | %s",
+        // Print result row using hardware-measured latency (latency_out).
+        // This matches [latmon] exactly — no tb_cycle offset.
+        $display("[RESULT]  %6d | %8d | %13d | %18.2f | %9d | %5s | %s",
                  i,
                  pkt_sizes[i],
-                 measured_lat,
-                 real'(pkt_sizes[i]) / real'(measured_lat),
+                 latency_out,
+                 real'(pkt_sizes[i]) / real'(latency_out),
+                 peak_occ,
+                 fifo_full_seen ? "YES" : "no",
                  cfg_string());
 
         // Brief gap: let pipeline fully return to idle before next packet.
@@ -322,17 +357,17 @@ module tb_pcie_axi_dma;
       // ====================================================================
       $display("[RESULT]  Batching %0d × 64B packets into one frame", BATCH_COUNT);
       $display("[RESULT] ----------------------------------------------------------------");
-      $display("[RESULT]  %6s | %8s | %13s | %18s | %s",
-               "BATCH#", "SIZE (B)", "LATENCY (cyc)", "EFFICIENCY (B/cyc)", "CONFIG");
+      $display("[RESULT]  %6s | %8s | %13s | %18s | %9s | %5s | %s",
+               "BATCH#", "SIZE (B)", "LATENCY (cyc)", "EFFICIENCY (B/cyc)", "FIFO_PEAK", "FULL?", "CONFIG");
       $display("[RESULT] ................................................................");
 
-      // Capture inject time from the first packet's perspective
-      inject_cyc = tb_cycle;
       prev_count = pkt_count;
+      reset_occ_tracking();
 
-      // Inject all BATCH_COUNT × 64B packets.  pcie_model serialises them
-      // (each packet waits for pcie to cycle back to S_RECV) so the
-      // inter-packet gaps at the batching_unit are ~43 cycles < BATCH_TIMEOUT.
+      // Inject all BATCH_COUNT × 64B packets.  pkt_inject fires for each
+      // individual packet; latency_monitor records inject_time for pkt_id=0
+      // (first packet). pcie_model serialises them so inter-packet gaps at
+      // the batching_unit are ~43 cycles < BATCH_TIMEOUT.
       for (int i = 0; i < BATCH_COUNT; i++) begin
         send_packet(i, pcie_axi_pkg::PKT_64B);
       end
@@ -350,15 +385,17 @@ module tb_pcie_axi_dma;
         $finish;
       end
 
-      done_cyc     = tb_cycle;
-      measured_lat = done_cyc - inject_cyc;
+      // Wait one posedge for latency_monitor to register latency_out.
+      @(posedge clk);
 
-      // Batch result row — SIZE is the total batch bytes
-      $display("[RESULT]  %6d | %8d | %13d | %18.2f | %s",
+      // Batch result row — SIZE is total batch bytes; latency from hardware monitor.
+      $display("[RESULT]  %6d | %8d | %13d | %18.2f | %9d | %5s | %s",
                0,
                BATCH_COUNT * pcie_axi_pkg::PKT_64B,
-               measured_lat,
-               real'(BATCH_COUNT * pcie_axi_pkg::PKT_64B) / real'(measured_lat),
+               latency_out,
+               real'(BATCH_COUNT * pcie_axi_pkg::PKT_64B) / real'(latency_out),
+               peak_occ,
+               fifo_full_seen ? "YES" : "no",
                cfg_string());
 
       repeat (8) @(posedge clk);

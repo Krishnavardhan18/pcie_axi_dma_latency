@@ -1,0 +1,76 @@
+% Chapter 1
+
+\chapter{Introduction}
+
+\label{Chapter1}
+
+\lhead{Chapter 1. \emph{Introduction}}
+
+%----------------------------------------------------------------------------------------
+%	SECTION: BACKGROUND
+%----------------------------------------------------------------------------------------
+
+\section{Background}
+\label{sec:ch1_background}
+
+\ac{PCIe} has become the standard interconnect for attaching high-performance peripherals -- network interface cards, solid-state storage controllers, accelerators, and custom \ac{FPGA}-based devices -- to a host processor \cite{pcisig2017base, budruk2004pcie}. Almost every such peripheral moves bulk data to and from host memory using a \ac{DMA} engine rather than processor-driven \ac{PIO}, because \ac{DMA} allows large transfers to proceed without consuming host CPU cycles for every word moved. On the \ac{FPGA} or \ac{SoC} fabric side of the interconnect, these \ac{DMA} engines are almost universally built around the \ac{AMBA} \ac{AXI} family of on-chip bus protocols, with the \ac{AXI4-Stream} variant used specifically for the unidirectional, back-pressure-aware data streams that connect a \ac{DMA} engine to downstream processing logic \cite{arm2021axi, arm2010axistream}.
+
+A complete host-to-device or device-to-host transfer over such a datapath therefore crosses two distinct protocol domains. On the PCIe side, data is carried inside \acp{TLP}, each of which carries a fixed-size header, is subject to credit-based flow control, and incurs round-trip latency for link-level acknowledgement. On the AXI side, a DMA engine such as the AMD-Xilinx AXI DMA \ac{IP} \cite{xilinx2021axidma} or the integrated PCIe block on UltraScale+ devices \cite{xilinx2021pcieintblock} translates between memory-mapped burst reads/writes and byte-enabled AXI4-Stream beats, typically after first fetching a descriptor that specifies the source address, destination address, and transfer length for the operation. Both of these mechanisms -- TLP framing and descriptor fetch -- impose a processing cost that is largely independent of how many bytes are actually being moved.
+
+For large transfers (multi-kilobyte and above), this fixed cost is negligible relative to the time spent moving payload bytes, and the datapath approaches its peak link bandwidth. For small transfers, however, the same fixed cost dominates: a 64-byte packet pays essentially the same TLP-header and descriptor-setup penalty as a 4096-byte packet, so its effective throughput and per-byte latency are far worse. Such small, latency-sensitive transfers are common in practice -- network packet forwarding, sensor telemetry, control-plane messages, and lock-step accelerator hand-offs all routinely move payloads well under one kilobyte -- which makes the small-packet regime an important, if under-examined, corner of PCIe-AXI DMA system design.
+
+%----------------------------------------------------------------------------------------
+%	SECTION: MOTIVATION
+%----------------------------------------------------------------------------------------
+
+\section{Motivation}
+\label{sec:ch1_motivation}
+
+Vendor documentation for AXI DMA and PCIe integrated-block IP cores specifies functional behaviour, register maps, and peak bandwidth figures, but rarely quantifies how the combined PCIe + DMA + AXI-Stream pipeline behaves as a function of packet size, nor does it typically expose a validated, cycle-level breakdown of where the latency of a single small transfer is actually spent. System architects sizing a design are consequently left to over-provision buffering, guess at achievable small-packet throughput, or discover the fixed-overhead penalty only after silicon or FPGA bring-up. Prior systems work on PCIe performance, such as the end-host networking characterisation of Neugebauer~et~al.~\cite{neugebauer2018pcie}, confirms empirically that small-transfer PCIe performance is dominated by per-descriptor and per-TLP overheads rather than raw link bandwidth, but that work characterises commodity NIC/host systems as a whole rather than providing an open, instrumented, packet-size-parameterised RTL model that a designer can simulate, modify, and re-measure.
+
+A closely related body of work in operating-systems networking establishes that batching or coalescing many small, fixed-overhead events into fewer, larger ones is a general and effective way to amortise per-event cost -- interrupt coalescing to avoid receive livelock \cite{mogul1997livelock} and hardware interrupt-moderation timers on commodity NICs \cite{intel2003moderation} are the classic examples. The same amortisation principle should, in principle, apply directly to PCIe-AXI DMA packet transfers: if the fixed cost is paid once per TLP/descriptor rather than once per application-level packet, small-packet efficiency should improve substantially. However, this transfer of a software networking technique into an RTL DMA datapath, together with a quantitative before/after measurement of the improvement it yields, does not appear to be addressed by existing IP-core documentation or the PCIe performance literature surveyed in \autoref{Chapter2}.
+
+This gap motivates the present thesis: to build a cycle-accurate, parameterised model of a PCIe-AXI DMA streaming pipeline; to use it to measure, rather than estimate, how end-to-end latency and per-byte efficiency vary with packet size; and to design, implement, and evaluate a packet-batching mechanism as a concrete mitigation, all within a synthesisable RTL testbed that can be re-run under different configurations.
+
+%----------------------------------------------------------------------------------------
+%	SECTION: PROBLEM STATEMENT
+%----------------------------------------------------------------------------------------
+
+\section{Problem Statement}
+\label{sec:ch1_problem}
+
+Given a PCIe-AXI DMA streaming datapath composed of a PCIe transaction layer, a descriptor-driven DMA engine, an AXI-Stream buffering stage, and a consumer, this thesis addresses the following problem: \emph{quantify the end-to-end latency and effective throughput of the datapath as a function of packet size, decompose that latency into its PCIe, DMA, and buffering contributions, and design an RTL-level optimisation that measurably improves small-packet efficiency without modifying the underlying PCIe or AXI protocols.}
+
+This is decomposed into four concrete sub-problems, each addressed in a later chapter:
+\begin{enumerate}
+    \item \textbf{Modeling.} Derive closed-form, packet-size-dependent latency expressions for the PCIe transaction layer and the DMA engine, grounded in the fixed-overhead-plus-linear-transfer structure documented for real TLP framing and descriptor processing (\autoref{Chapter3}).
+    \item \textbf{Implementation.} Realise these models, together with an AXI-Stream FIFO, a batching unit, and a hardware latency-measurement block, as synthesisable SystemVerilog RTL that can be simulated cycle-accurately (\autoref{Chapter4}, \autoref{Chapter5}).
+    \item \textbf{Measurement.} Build a self-checking testbench that injects packets of varying size and configuration into the RTL pipeline and measures per-packet latency directly in hardware, not via a software proxy (\autoref{Chapter6}).
+    \item \textbf{Optimisation and evaluation.} Implement a small-packet batching unit, and quantify its latency and efficiency benefit against the un-batched baseline, together with a study of how AXI-Stream FIFO depth affects buffering headroom under a rate-limited consumer (\autoref{Chapter7}).
+\end{enumerate}
+
+%----------------------------------------------------------------------------------------
+%	SECTION: OBJECTIVES
+%----------------------------------------------------------------------------------------
+
+\section{Objectives of the Thesis}
+\label{sec:ch1_objectives}
+
+The specific objectives pursued in this work are:
+
+\begin{enumerate}
+    \item To develop an analytical latency model for a PCIe transaction layer and a descriptor-based DMA engine, expressing per-packet delay as a fixed base term plus a term proportional to packet size.
+    \item To design and implement, in synthesisable SystemVerilog, a seven-stage behavioural pipeline (\texttt{pcie\_model}, \texttt{dma\_model}, an AXI memory-mapped-to-stream adapter, a parameterised AXI-Stream FIFO, a batching unit, a stream sink, and a hardware latency monitor) that reproduces this latency behaviour cycle-accurately.
+    \item To build a directed SystemVerilog testbench that exercises the pipeline across a representative range of packet sizes (64~B to 4~KB) and configurations, and to validate the hardware-measured latency against the analytical model.
+    \item To design a small-packet batching mechanism that coalesces multiple small packets into a single larger AXI-Stream frame before it reaches the PCIe/DMA overhead-paying stages, and to quantify the resulting latency and efficiency improvement relative to the un-batched baseline.
+    \item To characterise the effect of AXI-Stream FIFO depth on buffering headroom and back-pressure behaviour under both an always-ready and a rate-limited (stalling) consumer, and to correctly distinguish buffering headroom from steady-state throughput.
+\end{enumerate}
+
+%----------------------------------------------------------------------------------------
+%	SECTION: ORGANIZATION OF THE THESIS
+%----------------------------------------------------------------------------------------
+
+\section{Organization of the Thesis}
+\label{sec:ch1_organization}
+
+The remainder of this thesis is organised as follows. \autoref{Chapter2} reviews prior work on PCIe performance characterisation, AXI-based DMA architectures, and overhead-amortisation techniques such as interrupt and transfer coalescing, and identifies the specific research gap this thesis addresses. \autoref{Chapter3} presents the background material -- the PCIe transaction layer, the AMBA AXI4 and AXI4-Stream protocols, descriptor-based DMA operation, and the queueing-theoretic notion of fixed-plus-proportional service time -- needed to justify the latency model used later. \autoref{Chapter4} describes the system architecture of the implemented PCIe-AXI DMA streaming pipeline, module by module, together with the inter-stage AXI-Stream signalling conventions. \autoref{Chapter5} details the design and implementation methodology, including the finite-state-machine designs of the PCIe and DMA models, the batching-unit algorithm, and the hardware latency-monitor instrumentation. \autoref{Chapter6} describes the experimental setup: the Vivado xsim simulation flow, the testbench architecture, and the verification milestones completed during the project. \autoref{Chapter7} presents and analyses the simulation results -- baseline latency and efficiency versus packet size, the per-stage latency breakdown, the batching experiment, and the FIFO-depth sweep -- and discusses their implications. \autoref{Chapter8} concludes the thesis, summarising the research contributions, discussing the limitations of the present model, and outlining directions for future work.

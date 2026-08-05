@@ -1,0 +1,79 @@
+% Appendix A
+
+\chapter{Package Parameters and Representative Simulation Output}
+
+\label{AppendixA}
+
+\lhead{Appendix A. \emph{Package Parameters and Representative Simulation Output}}
+
+This appendix lists the complete set of configuration parameters exported by \texttt{pcie\_axi\_pkg} (\autoref{sec:ch4_sideband}) and reproduces a representative excerpt of the simulator's \texttt{[RESULT]} output for the baseline scenario (\autoref{sec:ch7_baseline}), for reference alongside the summarised tables of \autoref{Chapter7}.
+
+\section{Complete Package Parameter Listing}
+\label{sec:appA_params}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}lrl@{}}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\texttt{DATA\_WIDTH}              & 64   & AXI-Stream data bus width (bits) \\
+\texttt{STRB\_WIDTH}               & 8    & \texttt{DATA\_WIDTH/8} (bytes per beat) \\
+\texttt{PKT\_SIZE\_W}              & 13   & Packet byte-length field width (0--8191 B) \\
+\texttt{PKT\_ID\_W}                & 8    & Packet tag/ID field width (0--255) \\
+\texttt{ADDR\_WIDTH}               & 32   & AXI memory-mapped address width \\
+\texttt{PCIE\_BASE\_LATENCY}        & 20   & PCIe fixed per-TLP overhead (cycles) \\
+\texttt{PCIE\_PER\_DW\_LATENCY}     & 1    & PCIe overhead per 4-byte DWORD (cycles) \\
+\texttt{DMA\_SETUP\_CYCLES}         & 8    & DMA descriptor-fetch overhead (cycles) \\
+\texttt{DMA\_BYTES\_PER\_CYC}       & 8    & DMA effective transfer rate (bytes/cycle) \\
+\texttt{FIFO\_DEPTH\_DEFAULT}       & 64   & AXI-Stream FIFO depth (beats) \\
+\texttt{BATCH\_COUNT\_DEFAULT}      & 4    & Packets coalesced per batch \\
+\texttt{BATCH\_TIMEOUT\_DEFAULT}    & 64   & Idle cycles before forced batch flush \\
+\texttt{SINK\_STALL\_EN\_DEFAULT}   & 0    & Consumer back-pressure model enable \\
+\texttt{SINK\_STALL\_PERIOD\_DEFAULT}& 4   & Consumer stall period (cycles) \\
+\texttt{SINK\_STALL\_READY\_DEFAULT}& 1    & Consumer ready cycles per period \\
+\texttt{TIMESTAMP\_WIDTH}          & 32   & Latency-monitor cycle-counter width (bits) \\
+\texttt{MAX\_PACKETS}              & 256  & Max in-flight packets tracked by the monitor \\
+\bottomrule
+\end{tabular}
+\caption{Complete parameter listing from \texttt{pcie\_axi\_pkg.sv}.}
+\label{tab:appA_params}
+\end{table}
+
+\section{Representative Simulator Output}
+\label{sec:appA_output}
+
+The excerpt below reproduces the \texttt{[RESULT]} table format emitted by the testbench (\autoref{sec:ch6_testbench}) for the baseline scenario (\texttt{TB\_SCENARIO=0}, \texttt{FIFO\_DEPTH=64}), summarised in \autoref{tab:baseline_results}.
+
+\begin{verbatim}
+[RESULT] ================================================================
+[RESULT]  PCIe-AXI DMA Latency Simulation  |  Config: BASELINE,FIFO=64
+[RESULT] ================================================================
+[RESULT]  PKT_ID | SIZE (B) | LATENCY (cyc) | EFFICIENCY (B/cyc) | FIFO_PEAK | FULL?
+[RESULT] ----------------------------------------------------------------
+[RESULT]       0 |       64 |            71 |               0.90 |         1 |    no
+[RESULT]       1 |      128 |           111 |               1.15 |         1 |    no
+[RESULT]       2 |      256 |           191 |               1.34 |         1 |    no
+[RESULT]       3 |      512 |           351 |               1.46 |         1 |    no
+[RESULT]       4 |     1024 |           671 |               1.53 |         1 |    no
+[RESULT]       5 |     4096 |          2591 |               1.58 |         1 |    no
+[RESULT] ----------------------------------------------------------------
+[RESULT]  Total packets received: 6
+[RESULT] ================================================================
+\end{verbatim}
+
+The corresponding hardware latency-monitor summary, printed once at the end of simulation from the \texttt{final} block of \texttt{latency\_monitor} (\autoref{sec:ch4_latency_monitor}), is:
+
+\begin{verbatim}
+[latmon] ================================================
+[latmon]         LATENCY MONITOR SUMMARY
+[latmon] ================================================
+[latmon]  Packets measured : 6
+[latmon]  Min latency      : 71     cycles
+[latmon]  Max latency      : 2591   cycles
+[latmon]  Avg latency      : 664.3  cycles
+[latmon]  Total bytes      : 6080   bytes
+[latmon]  Avg efficiency   : 1.53   B/cyc
+[latmon]  Eff throughput   : 152.5  MB/s (100MHz)
+[latmon] ================================================
+\end{verbatim}

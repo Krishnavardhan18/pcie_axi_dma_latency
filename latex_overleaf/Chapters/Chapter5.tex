@@ -1,0 +1,119 @@
+% Chapter 5
+
+\chapter{Design and Implementation}
+
+\label{Chapter5}
+
+\lhead{Chapter 5. \emph{Design and Implementation}}
+
+This chapter details the design methodology followed while implementing the architecture of \autoref{Chapter4}, the finite-state-machine designs of the two timing-critical stages (\texttt{pcie\_model} and \texttt{dma\_model}), the packet-batching algorithm, and the implementation of the hardware latency monitor, including a timing subtlety that was discovered and corrected during development.
+
+%----------------------------------------------------------------------------------------
+
+\section{Design Methodology}
+\label{sec:ch5_methodology}
+
+The pipeline was built incrementally, one stage at a time, rather than as a single monolithic design, for two reasons specific to a latency-measurement study. First, because every stage communicates with its neighbours purely through the AXI4-Stream handshake of \autoref{sec:ch3_axi}, each stage could be developed and elaborated against stub (safe-default-output) versions of the stages not yet implemented, so the design always elaborated and simulated to completion, giving a continuously green baseline to build on. Second, because the object of study is \emph{where} latency is spent, each stage's timing contribution needed to be independently attributable; building and testing \texttt{pcie\_model} in isolation before adding \texttt{dma\_model}, for example, made it possible to confirm each stage's measured delay against Equations~\ref{eq:pcie_latency}--\ref{eq:dma_latency} before composing it with the next stage, rather than debugging an aggregate number that could hide a compensating pair of errors.
+
+All modules follow the same coding conventions: parameters default to values imported from the shared \texttt{pcie\_axi\_pkg} package (\autoref{tab:pkg_params}) but can be overridden per instantiation; sequential logic is written with \texttt{always\_ff} blocks synchronous to \texttt{clk} with asynchronous active-low reset; and all diagnostic \texttt{\$display}/\texttt{\$warning} statements are wrapped in \texttt{synthesis translate\_off}/\texttt{translate\_on} pairs so the modules remain synthesisable despite the simulation-only instrumentation used for the results of \autoref{Chapter7}.
+
+%----------------------------------------------------------------------------------------
+
+\section{\texttt{pcie\_model} Finite-State-Machine Design}
+\label{sec:ch5_pcie_fsm}
+
+\autoref{fig:pcie_fsm} shows the three-state machine that implements the PCIe transaction-layer delay of Equation~\ref{eq:pcie_latency}.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  state/.style={draw, circle, minimum size=2.0cm, align=center, font=\small},
+  arrow/.style={-Latex, thick}
+]
+  \node[state] (recv)  {S\_RECV\\[2pt]{\tiny s\_tready=1}};
+  \node[state, right=3.6cm of recv] (delay) {S\_DELAY\\[2pt]{\tiny s\_tready=0}};
+  \node[state, below=2.4cm of recv, xshift=1.8cm] (send)  {S\_SEND\\[2pt]{\tiny m\_tvalid=1}};
+
+  \draw[arrow] (recv) -- node[above,font=\tiny,align=center]{tlast:\\load delay\_cnt} (delay);
+  \draw[arrow] (delay) -- node[right,font=\tiny,align=center]{delay\_cnt==0} (send);
+  \draw[arrow] (send) -- node[left,font=\tiny,align=center]{m\_tready \&\\buf\_last} (recv);
+  \draw[arrow] (delay) to[out=135,in=45,looseness=6] node[above,font=\tiny]{delay\_cnt--} (delay);
+  \draw[arrow] (send) to[out=-45,in=-135,looseness=6] node[below,font=\tiny]{m\_tready \& !last: rd\_ptr++} (send);
+\end{tikzpicture}
+\caption{\texttt{pcie\_model} state machine. The packet is fully buffered in S\_RECV, held for \texttt{computed\_delay} $= T_{base} + \lceil S/4\rceil \cdot T_{dw}$ cycles in S\_DELAY, then replayed beat-by-beat in S\_SEND.}
+\label{fig:pcie_fsm}
+\end{figure}
+
+In \textbf{S\_RECV}, \texttt{s\_tready} is asserted and every incoming beat is written into an internal packet buffer sized for the largest packet under test (4~KB, i.e.\ 512 beats at the default 64-bit bus width); when \texttt{s\_tlast} is seen, the per-packet size and tag are latched from \texttt{tuser}/\texttt{tid}, the delay counter is loaded combinationally from \texttt{computed\_delay = BASE\_LATENCY + ((pkt\_size+3)>>2) * PER\_DW\_LATENCY} (an integer formulation of $\lceil S/4\rceil$ that avoids a division operator), and the machine moves to \textbf{S\_DELAY}. In S\_DELAY, \texttt{s\_tready} is de-asserted -- back-pressuring the packet generator for the duration of the modelled PCIe delay -- and the counter is decremented once per cycle until it reaches zero, at which point the machine moves to \textbf{S\_SEND} and begins driving the buffered beats to \texttt{dma\_model}, honouring \texttt{m\_tready} back-pressure and returning to S\_RECV once the buffered \texttt{tlast} beat is accepted. Because exactly one packet is buffered and replayed at a time (matching the sequential, one-packet-in-flight injection pattern of the testbench described in \autoref{sec:ch6_testbench}), the buffer indexing requires no wrap-around logic beyond a simple reset-to-zero on each packet boundary.
+
+%----------------------------------------------------------------------------------------
+
+\section{\texttt{dma\_model} Finite-State-Machine Design}
+\label{sec:ch5_dma_fsm}
+
+\autoref{fig:dma_fsm} shows the analogous three-state machine implementing the DMA descriptor-processing delay of Equation~\ref{eq:dma_latency}.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  state/.style={draw, circle, minimum size=2.0cm, align=center, font=\small},
+  arrow/.style={-Latex, thick}
+]
+  \node[state] (recv)   {S\_RECV\\[2pt]{\tiny s\_tready=1}};
+  \node[state, right=3.6cm of recv]  (setup)  {S\_SETUP\\[2pt]{\tiny descriptor}};
+  \node[state, below=2.4cm of recv, xshift=1.8cm] (send)   {S\_SEND\\[2pt]{\tiny throttled}};
+
+  \draw[arrow] (recv) -- node[above,font=\tiny,align=center]{tlast:\\load setup\_cnt} (setup);
+  \draw[arrow] (setup) -- node[right,font=\tiny,align=center]{setup\_cnt==0} (send);
+  \draw[arrow] (send) -- node[left,font=\tiny,align=center]{m\_tready \&\\buf\_last} (recv);
+  \draw[arrow] (setup) to[out=135,in=45,looseness=6] node[above,font=\tiny]{setup\_cnt--} (setup);
+  \draw[arrow] (send) to[out=-45,in=-135,looseness=6] node[below,font=\tiny]{throttle\_cnt-- / advance} (send);
+\end{tikzpicture}
+\caption{\texttt{dma\_model} state machine. S\_SETUP models the fixed \texttt{SETUP\_CYCLES} descriptor-fetch overhead of Section~\ref{sec:ch3_dma}; S\_SEND plays out beats at a rate set by \texttt{BYTES\_PER\_CYC}, with an inter-beat holdoff (\texttt{throttle\_cnt}) only when the modelled DMA rate is below the bus's native rate.}
+\label{fig:dma_fsm}
+\end{figure}
+
+The behaviour mirrors \texttt{pcie\_model} with one addition: in \textbf{S\_SEND}, a \texttt{throttle\_cnt} counter models a DMA engine reading from memory slower than the AXI-Stream bus's native rate. \texttt{CYCLES\_PER\_BEAT} is derived at elaboration time as $\lceil W_{bus} / \text{BYTES\_PER\_CYC} \rceil$, where $W_{bus}$ is the bus width in bytes; at the default configuration (\texttt{BYTES\_PER\_CYC} equal to the bus width), \texttt{CYCLES\_PER\_BEAT = 1} and every beat is produced with no holdoff, so the transfer-phase contribution to Equation~\ref{eq:dma_latency} reduces exactly to the number of beats in the packet. A reduced \texttt{BYTES\_PER\_CYC} (e.g.\ modelling a slower DRAM back-end) inserts a proportional holdoff between beats, which is available as an experimental knob but is held at its full-rate default throughout the results of \autoref{Chapter7}, since this thesis's focus is the fixed setup term rather than DMA-side memory bandwidth.
+
+Both FSMs report their key internal timing events via simulation-only \texttt{\$display} statements -- \texttt{pcie\_model} warns if its buffer nears the size limit set by the 4~KB test packet, and \texttt{dma\_model} reports the exact cycle at which each packet's descriptor-setup countdown completes -- which were used during development to cross-check each stage's contribution against Equations~\ref{eq:pcie_latency}--\ref{eq:dma_latency} before the stages were composed together.
+
+%----------------------------------------------------------------------------------------
+
+\section{Small-Packet Batching Algorithm}
+\label{sec:ch5_batching}
+
+The batching unit (\autoref{sec:ch4_batching_unit}) is implemented as an online pass-through with a small amount of counting state rather than a buffering stage, so that it adds no latency of its own beyond the coalescing effect it is designed to produce. \autoref{alg:batching} summarises its per-beat decision logic.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}p{0.95\textwidth}@{}}
+\toprule
+\textbf{Algorithm: per-beat batching decision} (executed every cycle a beat is accepted, i.e.\ \texttt{s\_tvalid \&\& m\_tready}) \\
+\midrule
+1. Pass \texttt{tdata}/\texttt{tkeep} through unchanged (zero-latency wiring). \\
+2. If this is the first beat of a new batch, latch \texttt{first\_id} $\leftarrow$ \texttt{s\_tid}. \\
+3. If \texttt{s\_tlast} is asserted (an inner packet boundary): \\
+\quad a. Accumulate \texttt{pkt\_cnt} $\leftarrow$ \texttt{pkt\_cnt} + 1 and \texttt{batch\_bytes} $\leftarrow$ \texttt{batch\_bytes} + \texttt{s\_tuser}. \\
+\quad b. If \texttt{pkt\_cnt} has now reached \texttt{BATCH\_COUNT}, or a timeout flush is pending: assert \texttt{m\_tlast}, drive \texttt{m\_tuser} = accumulated \texttt{batch\_bytes}, drive \texttt{m\_tid} = \texttt{first\_id}, and reset all batch state. \\
+\quad c. Otherwise, suppress \texttt{m\_tlast} (the inner boundary is invisible downstream) and continue accumulating. \\
+4. If no beat is accepted for \texttt{BATCH\_TIMEOUT} consecutive cycles while a batch is in progress, set \texttt{flush\_pending}, causing the \emph{next} \texttt{tlast} to close the batch regardless of \texttt{pkt\_cnt} (prevents an indefinite hang on a short final batch). \\
+\bottomrule
+\end{tabular}
+\caption{Batching-unit decision logic executed on every accepted beat.}
+\label{alg:batching}
+\end{table}
+
+Two design details are worth making explicit. First, \texttt{m\_tuser} is only architecturally meaningful at the beat where \texttt{m\_tlast} is asserted (the only beat \texttt{stream\_sink} actually reads it on), so the running partial sum on intermediate beats is a "don't care" for correctness -- this simplifies the combinational output mux at the cost of a value that would be misleading if inspected mid-batch. Second, the module is parameterised by a single \texttt{enable} input, and when \texttt{enable=0} every output is wired directly from the corresponding input with no counting logic in the path at all; this is what allows the baseline (\autoref{sec:ch7_baseline}) and batched (\autoref{sec:ch7_batching}) configurations to be produced from the same RTL and the same testbench, differing only in this one bit, giving a clean, controlled A/B comparison rather than two independently-built designs that might differ in unintended ways.
+
+The corner case noted in \autoref{sec:ch4_batching_unit} -- an incomplete final batch with no further \texttt{tlast} to trigger the timeout flush -- was a deliberate scope decision: the testbench's batching scenario (\autoref{sec:ch6_testbench}) always injects exactly \texttt{BATCH\_COUNT} packets, so the corner case does not arise in any experiment reported in this thesis, but it is recorded here as a known limitation of the current implementation (revisited in \autoref{sec:ch8_limitations}).
+
+%----------------------------------------------------------------------------------------
+
+\section{Hardware Latency Monitor: Implementation and a Timing Correction}
+\label{sec:ch5_latmon_impl}
+
+The latency monitor's core measurement is a subtraction between two cycle-counter samples: an injection timestamp, recorded when \texttt{pkt\_inject} fires, and a completion timestamp, recorded when the corresponding \texttt{pkt\_done} fires. Both events are registered, one-cycle pulses, and the free-running \texttt{cycle\_cnt} they are compared against is read by both always-block instances in the same active region, so the computed difference is an exact integer number of clock periods between the two hardware events, with no possibility of an off-by-one error from mixing pre- and post-edge values.
+
+An earlier iteration of the testbench, however, computed a second, independent latency figure in software using its own local cycle counter, sampled one cycle \emph{before} the point at which the corresponding hardware event actually registered. This produced a constant, systematic two-cycle discrepancy between the testbench's self-reported latency and the hardware latency monitor's figure -- consistent across every packet size, and hence a fixed measurement-methodology artefact rather than a functional bug in the pipeline itself. The fix, described further in \autoref{sec:ch6_milestones}, was to make the testbench's reported \texttt{[RESULT]} rows read \texttt{latency\_out} directly from the hardware monitor rather than recomputing it independently, which by construction eliminates any possibility of the two figures disagreeing. This episode is recorded here because it illustrates a general methodological point relevant to any latency study of this kind: once both a device-under-test-side measurement and a testbench-side measurement exist, they must be reconciled to a single reference point, or an artefact of the measurement apparatus can be mistaken for a property of the design under test.
+
+A second, batching-specific detail in the monitor's implementation is worth noting. \texttt{size\_store[id]}, populated at injection time, records the size of the individual packet that was injected, while \texttt{done\_size}, supplied by \texttt{stream\_sink} at completion time, records the actual size of whatever frame closed -- the full batch total when the batching unit is active. The monitor's efficiency and throughput statistics are computed from \texttt{done\_size}, not \texttt{size\_store}, specifically so that a coalesced batch is correctly reported at its true aggregate size rather than at the size of only its first constituent packet; the breakdown estimator (the per-packet \texttt{est:} diagnostic line) additionally compares these two values to detect whether a given completion is a single packet or a batch, and selects the appropriate closed-form latency estimate (Equation~\ref{eq:total_latency} for a single packet, or its $N$-fold serial extension implied by Equation~\ref{eq:batch_inequality} for a batch) accordingly.

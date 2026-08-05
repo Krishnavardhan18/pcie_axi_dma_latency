@@ -21,6 +21,8 @@
 //   - FIFO_DEPTH          → FIFO depth study
 //   - BATCH_COUNT/TIMEOUT → batching study
 //   - BATCHING_EN         → 0=baseline, 1=optimized
+//   - SINK_STALL_EN/PERIOD/READY → consumer back-pressure model; must be
+//     enabled for FIFO_DEPTH to have any effect on latency (see stream_sink.sv)
 //
 // =============================================================================
 
@@ -47,7 +49,12 @@ module pcie_axi_dma_top #(
   // --- Batching unit --------------------------------------------------------
   parameter int BATCH_COUNT     = pcie_axi_pkg::BATCH_COUNT_DEFAULT,
   parameter int BATCH_TIMEOUT   = pcie_axi_pkg::BATCH_TIMEOUT_DEFAULT,
-  parameter bit BATCHING_EN     = 1'b0   // 0 = baseline, 1 = optimized
+  parameter bit BATCHING_EN     = 1'b0,  // 0 = baseline, 1 = optimized
+
+  // --- Stream sink back-pressure model (FIFO depth-sweep experiment) -------
+  parameter bit SINK_STALL_EN     = pcie_axi_pkg::SINK_STALL_EN_DEFAULT,
+  parameter int SINK_STALL_PERIOD = pcie_axi_pkg::SINK_STALL_PERIOD_DEFAULT,
+  parameter int SINK_STALL_READY  = pcie_axi_pkg::SINK_STALL_READY_DEFAULT
 ) (
   input  logic                   clk,
   input  logic                   rst_n,
@@ -75,7 +82,9 @@ module pcie_axi_dma_top #(
   output logic [31:0]            pkt_count,
 
   // ---- FIFO status (optional debug) ---------------------------------------
-  output logic [$clog2(pcie_axi_pkg::FIFO_DEPTH_DEFAULT):0] fifo_occupancy,
+  // Width sized to the actual FIFO_DEPTH parameter (not the package
+  // default) — otherwise occupancy silently truncates for FIFO_DEPTH > 63.
+  output logic [$clog2(FIFO_DEPTH):0] fifo_occupancy,
   output logic                   fifo_full,
   output logic                   fifo_empty
 );
@@ -140,6 +149,7 @@ module pcie_axi_dma_top #(
   // [stream_sink] -> [latency_monitor]
   logic                   sink_pkt_done;
   logic [PKT_ID_W-1:0]    sink_done_id;
+  logic [PKT_SIZE_W-1:0]  sink_done_size;
 
   // ===========================================================================
   // Module instantiations
@@ -278,9 +288,12 @@ module pcie_axi_dma_top #(
 
   // --- Stage 6: Stream sink -------------------------------------------------
   stream_sink #(
-    .DATA_WIDTH (DATA_WIDTH),
-    .PKT_SIZE_W (PKT_SIZE_W),
-    .PKT_ID_W   (PKT_ID_W)
+    .DATA_WIDTH   (DATA_WIDTH),
+    .PKT_SIZE_W   (PKT_SIZE_W),
+    .PKT_ID_W     (PKT_ID_W),
+    .STALL_EN     (SINK_STALL_EN),
+    .STALL_PERIOD (SINK_STALL_PERIOD),
+    .STALL_READY  (SINK_STALL_READY)
   ) u_sink (
     .clk       (clk),
     .rst_n     (rst_n),
@@ -293,6 +306,7 @@ module pcie_axi_dma_top #(
     .s_tid     (batch_m_tid),
     .pkt_done  (sink_pkt_done),
     .done_id   (sink_done_id),
+    .done_size (sink_done_size),
     .pkt_count (pkt_count)
   );
 
@@ -310,6 +324,7 @@ module pcie_axi_dma_top #(
     .inject_size  (inject_size),
     .pkt_done     (sink_pkt_done),
     .done_id      (sink_done_id),
+    .done_size    (sink_done_size),
     .latency_out  (latency_out),
     .latency_valid(latency_valid),
     .latency_id   (latency_id)

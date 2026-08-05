@@ -1,0 +1,127 @@
+mkdir -p /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/build_kv_scenario2_fifo16
+cd /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/build_kv_scenario2_fifo16 && \
+xvlog --sv --incr \
+    /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/pcie_axi_pkg.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/pcie_model.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/dma_model.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/axi_mm2s_adapter.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/axis_fifo.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/batching_unit.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/stream_sink.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/latency_monitor.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/pcie_axi_dma_top.sv /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/verif/tb/tb_pcie_axi_dma.sv \
+    -log xvlog.log
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/pcie_axi_pkg.sv" into library work
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/pcie_model.sv" into library work
+INFO: [VRFC 10-311] analyzing module pcie_model
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/dma_model.sv" into library work
+INFO: [VRFC 10-311] analyzing module dma_model
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/axi_mm2s_adapter.sv" into library work
+INFO: [VRFC 10-311] analyzing module axi_mm2s_adapter
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/axis_fifo.sv" into library work
+INFO: [VRFC 10-311] analyzing module axis_fifo
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/batching_unit.sv" into library work
+INFO: [VRFC 10-311] analyzing module batching_unit
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/stream_sink.sv" into library work
+INFO: [VRFC 10-311] analyzing module stream_sink
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/latency_monitor.sv" into library work
+INFO: [VRFC 10-311] analyzing module latency_monitor
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/design/rtl/pcie_axi_dma_top.sv" into library work
+INFO: [VRFC 10-311] analyzing module pcie_axi_dma_top
+INFO: [VRFC 10-2263] Analyzing SystemVerilog file "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/verif/tb/tb_pcie_axi_dma.sv" into library work
+INFO: [VRFC 10-311] analyzing module tb_pcie_axi_dma
+touch /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/build_kv_scenario2_fifo16/.compiled
+cd /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/build_kv_scenario2_fifo16 && \
+xelab tb_pcie_axi_dma \
+    --snapshot tb_pcie_axi_dma_snap \
+    -generic_top "TB_SCENARIO=2" -generic_top "FIFO_DEPTH=16" -generic_top "BATCH_COUNT=4" -generic_top "BATCH_TIMEOUT=64" -generic_top "SINK_STALL_EN=0" -generic_top "SINK_STALL_PERIOD=4" -generic_top "SINK_STALL_READY=1" \
+    --timescale 1ns/1ps \
+    --debug typical \
+    -log xelab.log
+Vivado Simulator v2022.2
+Copyright 1986-1999, 2001-2022 Xilinx, Inc. All Rights Reserved.
+Running: /tools/Xilinx/Vivado/2022.2/bin/unwrapped/lnx64.o/xelab tb_pcie_axi_dma --snapshot tb_pcie_axi_dma_snap -generic_top TB_SCENARIO=2 -generic_top FIFO_DEPTH=16 -generic_top BATCH_COUNT=4 -generic_top BATCH_TIMEOUT=64 -generic_top SINK_STALL_EN=0 -generic_top SINK_STALL_PERIOD=4 -generic_top SINK_STALL_READY=1 --timescale 1ns/1ps --debug typical -log xelab.log 
+Multi-threading is on. Using 2 slave threads.
+Starting static elaboration
+Pass Through NonSizing Optimizer
+Completed static elaboration
+Starting simulation data flow analysis
+Completed simulation data flow analysis
+Time Resolution for simulation is 1ps
+Compiling package work.pcie_axi_pkg
+Compiling module work.pcie_model(DATA_WIDTH=64,PKT_SIZ...
+Compiling module work.dma_model(DATA_WIDTH=64,PKT_SIZE...
+Compiling module work.axi_mm2s_adapter(DATA_WIDTH=64,P...
+Compiling module work.axis_fifo(DATA_WIDTH=64,PKT_SIZE...
+Compiling module work.batching_unit(DATA_WIDTH=64,PKT_...
+Compiling module work.stream_sink(DATA_WIDTH=64,PKT_SI...
+Compiling module work.latency_monitor(PKT_ID_W=8,PKT_S...
+Compiling module work.pcie_axi_dma_top(DATA_WIDTH=64,P...
+Compiling module work.tb_pcie_axi_dma(TB_SCENARIO=2,FI...
+Built simulation snapshot tb_pcie_axi_dma_snap
+touch /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/build_kv_scenario2_fifo16/.elaborated
+cd /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/build_kv_scenario2_fifo16 && \
+xsim tb_pcie_axi_dma_snap \
+    --runall \
+    --log xsim_batch.log
+
+****** xsim v2022.2 (64-bit)
+  **** SW Build 3671981 on Fri Oct 14 04:59:54 MDT 2022
+  **** IP Build 3669848 on Fri Oct 14 08:30:02 MDT 2022
+    ** Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+
+source xsim.dir/tb_pcie_axi_dma_snap/xsim_script.tcl
+# xsim {tb_pcie_axi_dma_snap} -autoloadwcfg -runall
+Time resolution is 1 ps
+run -all
+[batching_unit] Bypass mode (enable=0)
+
+[RESULT] ================================================================
+[RESULT]  PCIe-AXI DMA Latency Simulation  |  Config: BASELINE,FIFO=16
+[RESULT] ================================================================
+[RESULT]  PKT_ID | SIZE (B) | LATENCY (cyc) | EFFICIENCY (B/cyc) | FIFO_PEAK | FULL?
+[RESULT] ----------------------------------------------------------------
+[dma_model] t=775000  pkt_id=0  descriptor setup done  (SETUP_CYCLES=8)
+[sink]  t=865000  pkt_id=0  size=64B  count=1
+[latmon] pkt_id=0  size=  64B  latency=   71 cyc  eff= 0.90 B/cyc
+[latmon]  ↳ est: PCIe=44  DMA=24  other=3  total_measured=71
+[RESULT]       0 |       64 |            71 |               0.90 |         1 |    no | BASELINE,FIFO=16
+[dma_model] t=1915000  pkt_id=1  descriptor setup done  (SETUP_CYCLES=8)
+[sink]  t=2085000  pkt_id=1  size=128B  count=2
+[latmon] pkt_id=1  size= 128B  latency=  111 cyc  eff= 1.15 B/cyc
+[latmon]  ↳ est: PCIe=68  DMA=40  other=3  total_measured=111
+[RESULT]       1 |      128 |           111 |               1.15 |         1 |    no | BASELINE,FIFO=16
+[dma_model] t=3775000  pkt_id=2  descriptor setup done  (SETUP_CYCLES=8)
+[sink]  t=4105000  pkt_id=2  size=256B  count=3
+[latmon] pkt_id=2  size= 256B  latency=  191 cyc  eff= 1.34 B/cyc
+[latmon]  ↳ est: PCIe=116  DMA=72  other=3  total_measured=191
+[RESULT]       2 |      256 |           191 |               1.34 |         1 |    no | BASELINE,FIFO=16
+[dma_model] t=7075000  pkt_id=3  descriptor setup done  (SETUP_CYCLES=8)
+[sink]  t=7725000  pkt_id=3  size=512B  count=4
+[latmon] pkt_id=3  size= 512B  latency=  351 cyc  eff= 1.46 B/cyc
+[latmon]  ↳ est: PCIe=212  DMA=136  other=3  total_measured=351
+[RESULT]       3 |      512 |           351 |               1.46 |         1 |    no | BASELINE,FIFO=16
+[dma_model] t=13255000  pkt_id=4  descriptor setup done  (SETUP_CYCLES=8)
+[sink]  t=14545000  pkt_id=4  size=1024B  count=5
+[latmon] pkt_id=4  size=1024B  latency=  671 cyc  eff= 1.53 B/cyc
+[latmon]  ↳ est: PCIe=404  DMA=264  other=3  total_measured=671
+[RESULT]       4 |     1024 |           671 |               1.53 |         1 |    no | BASELINE,FIFO=16
+[dma_model] t=35435000  pkt_id=5  descriptor setup done  (SETUP_CYCLES=8)
+[sink]  t=40565000  pkt_id=5  size=4096B  count=6
+[latmon] pkt_id=5  size=4096B  latency= 2591 cyc  eff= 1.58 B/cyc
+[latmon]  ↳ est: PCIe=1556  DMA=1032  other=3  total_measured=2591
+[RESULT]       5 |     4096 |          2591 |               1.58 |         1 |    no | BASELINE,FIFO=16
+[RESULT] ----------------------------------------------------------------
+[RESULT]  Total packets received: 6
+[RESULT] ================================================================
+
+
+[latmon] ╔══════════════════════════════════════════╗
+[latmon] ║        LATENCY MONITOR SUMMARY           ║
+[latmon] ╠══════════════════════════════════════════╣
+[latmon] ║  Packets measured :    6                 ║
+[latmon] ║  Min latency      :     71 cycles          ║
+[latmon] ║  Max latency      :   2591 cycles          ║
+[latmon] ║  Avg latency      :    664.3 cycles        ║
+[latmon] ║  Total bytes      :     6080 bytes           ║
+[latmon] ║  Avg efficiency   :  1.53 B/cyc         ║
+[latmon] ║  Eff throughput   :  152.5 MB/s (100MHz) ║
+[latmon] ╚══════════════════════════════════════════╝
+
+$finish called at time : 40865 ns : File "/get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/verif/tb/tb_pcie_axi_dma.sv" Line 412
+exit
+INFO: [Common 17-206] Exiting xsim at Sat Aug  1 16:38:40 2026...
+
+=== Batch simulation complete. Log: /get/work/krishna.vardhan/git_trees/mtp_pcie_axi/pcie_axi_dma_latency/build_kv_scenario2_fifo16/xsim_batch.log ===
