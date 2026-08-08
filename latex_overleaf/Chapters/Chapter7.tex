@@ -206,6 +206,30 @@ What FIFO depth \emph{does} change, exactly as anticipated by \autoref{sec:ch4_f
 
 %----------------------------------------------------------------------------------------
 
+\section{Comparison with Prior Work}
+\label{sec:ch7_comparison}
+
+\autoref{sec:ch2_gap} identified Gu et al.~\cite{gu2025cooptimization} as the closest prior attempt at the small-packet PCIe DMA problem this thesis addresses, and adopted it as the baseline to compare against. A direct, apples-to-apples number is not possible: Gu et al. measure real Gen3 traffic on a Xilinx VC709 board in GB/s and microseconds under a randomised data-centre-like packet mix, while this thesis measures a behavioural RTL model in simulated clock cycles under directed packet-size sweeps (\autoref{Chapter6}). What \emph{can} be compared fairly is the mechanism each uses to get its improvement, where in the system that mechanism sits, and whether the improvement can be attributed to a specific cause or only observed as an aggregate change. \autoref{tab:comparison} summarises this.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}p{2.3cm}p{3.4cm}p{3.6cm}p{3.6cm}@{}}
+\toprule
+\textbf{Study} & \textbf{Where the fix is applied} & \textbf{Reported improvement} & \textbf{Latency attributable to a specific stage?} \\
+\midrule
+Gu et al.~\cite{gu2025cooptimization} & Linux driver (descriptor prefetch) + PCIe config-space register (extended tag) + host CPU (multicore dispatch) & 123--136\% bandwidth, 15.1--24.0\% latency, randomised small-packet mix, real VC709/XDMA hardware & No -- three mechanisms are enabled together; the paper reports one combined GB/s and $\mu$s figure \\
+Kavianipour \& B{\"o}hm~\cite{kavianipour2012high} & Host-side buffer merging before the DMA call & Up to 1080~MB/s for merged/vectored writes vs.\ much lower for un-merged small (12~B) buffers & No -- throughput only, no latency breakdown \\
+This thesis & \texttt{batching\_unit}, a single RTL block on the AXI4-Stream side, upstream of \texttt{pcie\_model}/\texttt{dma\_model} & 19.0\% latency reduction, 1.25$\times$ efficiency, for four 64~B packets coalesced into one 256~B frame (\autoref{tab:batching_results}) & Yes -- the \texttt{latency\_monitor} breakdown (\autoref{tab:breakdown}) attributes the saving to paying $T_{base}$ and $T_{setup}$ once instead of four times \\
+\bottomrule
+\end{tabular}
+\caption{Mechanism-level comparison with the two closest prior PCIe-DMA studies. Absolute GB/s and $\mu$s figures from real hardware are not directly comparable to simulated-cycle figures from a behavioural RTL model; the comparison here is of mechanism and attributability, not of raw magnitude.}
+\label{tab:comparison}
+\end{table}
+
+Two things follow from this comparison. First, the part of this thesis's architecture responsible for the measured improvement is specifically the \texttt{batching\_unit} stage (\autoref{sec:ch4_batching_unit}, \autoref{sec:ch5_batching}): it is the only block that changes between the baseline and batched configurations of \autoref{sec:ch7_batching}, so the entire 19\% reduction is attributable to it and to nothing else in the pipeline. Gu et al.'s 15--24\% latency improvement, by contrast, is the joint effect of a modified host driver, a reconfigured PCIe extended-tag field, and multicore dispatch, so their paper cannot say how much of it comes from any one change. Second, the two results are not really in competition: Gu et al.'s techniques operate on the host and PCIe-configuration side of the link, while the batching unit operates entirely on the AXI4-Stream side, before a packet ever reaches \texttt{pcie\_model}. Nothing in principle stops the two from being combined -- the batching unit would simply present the descriptor-prefetch-augmented driver with fewer, larger transfers to prefetch for -- but demonstrating that combination is left as future work (\autoref{sec:ch8_future}), since it would require replacing the behavioural \texttt{pcie\_model} of this thesis with the real XDMA/driver stack that Gu et al. used, which \autoref{sec:ch8_limitations} identifies as a limitation of the current implementation.
+
+%----------------------------------------------------------------------------------------
+
 % \section{Discussion}
 % \label{sec:ch7_discussion}
 
