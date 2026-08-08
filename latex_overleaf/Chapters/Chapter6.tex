@@ -65,10 +65,11 @@ The pipeline was brought up and verified incrementally, stage by stage, followin
 \toprule
 \textbf{Milestone} & \textbf{Outcome} \\
 \midrule
-Architecture \& stubs & Package, top-level wiring, and stub modules with safe default outputs elaborate and \texttt{\$finish} cleanly, giving a green baseline for incremental development. \\
-\texttt{pcie\_model} & Three-state FSM implemented and its computed delay cross-checked by hand against Equation~\ref{eq:pcie_latency} for all six test packet sizes. \\
+% Architecture \& stubs & Package, top-level wiring, and stub modules with safe default outputs elaborate and \texttt{\$finish} cleanly, giving a green baseline for incremental development. \\
+% \texttt{pcie\_model} & Three-state FSM implemented and its computed delay cross-checked by hand against Equation~\ref{eq:pcie_latency} for all six test packet sizes. \\
 \texttt{dma\_model} & Three-state FSM implemented; descriptor-setup overhead fraction computed for 64~B/512~B/4~KB packets (50\%, 11\%, and 1.5\% of total DMA-stage cycles respectively), directly motivating the batching experiment of \autoref{sec:ch7_batching}. \\
-\texttt{axi\_mm2s\_adapter}, \texttt{axis\_fifo} & Zero-latency \texttt{tkeep} correction and FWFT FIFO implemented and unit-checked against hand-computed \texttt{tkeep} masks for packet sizes not aligned to the bus width. \\
+\texttt{axi\_mm2s}, \texttt{axis\_fifo} &
+Zero-latency \texttt{tkeep} correction and FWFT FIFO, verified using hand-computed \texttt{tkeep} masks for unaligned packet sizes. \\
 \texttt{stream\_sink} \& first end-to-end run & First complete pipeline run (bypass mode, \texttt{FIFO\_DEPTH=64}) produced a full latency/efficiency table across all six packet sizes; the \texttt{send\_packet} handshake bug of \autoref{sec:ch6_send_packet} was found and fixed at this stage, since it only manifests once a real multi-stage DUT can actually assert back-pressure on the last beat. \\
 \texttt{latency\_monitor} & Hardware latency monitor added; its measurements agreed with the testbench's own figures to within a constant $\pm 2$ cycles, which was traced to the testbench sampling its reference point one cycle before the corresponding hardware event (\autoref{sec:ch5_latmon_impl}) and fixed by making \texttt{[RESULT]} rows read \texttt{latency\_out} directly. \\
 \texttt{batching\_unit} & Batching FSM verified directly against its simulation diagnostics: three intermediate \texttt{tlast} pulses correctly suppressed, the fourth correctly closing the batch with the expected accumulated byte count and first-packet tag, and inter-packet gaps confirmed to remain below \texttt{BATCH\_TIMEOUT} so no spurious flush occurred. \\

@@ -128,11 +128,11 @@ The estimated PCIe and DMA contributions sum to within a constant 3 cycles of th
     width=0.7\textwidth, height=6cm,
     ybar, bar width=28pt,
     ylabel={Total latency (cycles)},
-    symbolic x coords={Independent,Batched},
+    symbolic x coords={4x64B independent, 1x256B batched},
     xtick=data, nodes near coords, grid=major, font=\small,
     ymin=0, ymax=320
 ]
-\addplot[fill=blue!40] coordinates {(Independent,284) (Batched,230)};
+\addplot[fill=blue!40] coordinates {(4x64B independent,284) (1x256B batched,230)};
 \end{axis}
 \end{tikzpicture}
 \caption{Total latency to deliver four 64~B packets' worth of payload (256~B): sent independently versus coalesced by the batching unit.}
@@ -206,7 +206,7 @@ What FIFO depth \emph{does} change, exactly as anticipated by \autoref{sec:ch4_f
 
 %----------------------------------------------------------------------------------------
 
-\section{Discussion}
-\label{sec:ch7_discussion}
+% \section{Discussion}
+% \label{sec:ch7_discussion}
 
-Taken together, the results of this chapter support three conclusions. First, the analytical fixed-plus-proportional latency model of \autoref{sec:ch3_latency_model} is not merely a simplifying assumption but an accurate description of the implemented RTL: \autoref{tab:breakdown} shows the model-based PCIe and DMA estimates matching the hardware-measured total to within a constant 3-cycle residual across a 64-fold range of packet sizes. Second, the small-packet inefficiency this thesis set out to quantify is substantial and measurable in cycle-accurate simulation, not just in principle: a 64~B transfer achieves only 57\% of the per-byte efficiency of a 4~KB transfer (\autoref{tab:baseline_results}), and the batching unit recovers a meaningful fraction of that gap -- a 19\% latency reduction for a representative 4-packet burst -- using a mechanism whose correctness was verified directly against its own simulation diagnostics (\autoref{sec:ch6_milestones}) rather than assumed from the design alone. Third, the FIFO-depth results (\autoref{tab:fifo_stall}) demonstrate a distinction -- between buffering headroom and steady-state single-flow latency -- that is easy to conflate when sizing a DMA buffer from bandwidth figures alone, and that this thesis's testbed makes directly and unambiguously measurable by contrasting the always-ready and rate-limited sink configurations.
+% Taken together, the results of this chapter support three conclusions. First, the analytical fixed-plus-proportional latency model of \autoref{sec:ch3_latency_model} is not merely a simplifying assumption but an accurate description of the implemented RTL: \autoref{tab:breakdown} shows the model-based PCIe and DMA estimates matching the hardware-measured total to within a constant 3-cycle residual across a 64-fold range of packet sizes. Second, the small-packet inefficiency this thesis set out to quantify is substantial and measurable in cycle-accurate simulation, not just in principle: a 64~B transfer achieves only 57\% of the per-byte efficiency of a 4~KB transfer (\autoref{tab:baseline_results}), and the batching unit recovers a meaningful fraction of that gap -- a 19\% latency reduction for a representative 4-packet burst -- using a mechanism whose correctness was verified directly against its own simulation diagnostics (\autoref{sec:ch6_milestones}) rather than assumed from the design alone. Third, the FIFO-depth results (\autoref{tab:fifo_stall}) demonstrate a distinction -- between buffering headroom and steady-state single-flow latency -- that is easy to conflate when sizing a DMA buffer from bandwidth figures alone, and that this thesis's testbed makes directly and unambiguously measurable by contrasting the always-ready and rate-limited sink configurations.

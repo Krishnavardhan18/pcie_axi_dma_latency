@@ -16,36 +16,16 @@ This chapter describes the architecture of the PCIe-AXI DMA streaming pipeline i
 The datapath is organised as a linear chain of seven modules, each connected to its neighbours by an AXI4-Stream interface, as shown in \autoref{fig:pipeline_overview}. A packet generator (implemented in the testbench, \autoref{Chapter6}) injects packets into \texttt{pcie\_model}, which are then carried, one stage at a time, through the DMA model, an AXI memory-mapped-to-stream adapter, a parameterised FIFO, an optional batching unit, and finally a stream sink; a hardware latency monitor observes injection and completion events and computes per-packet latency directly from the simulated hardware.
 
 \begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[
-  block/.style={draw, rounded corners, rectangle, minimum width=2.6cm, minimum height=1.1cm, align=center, font=\small, fill=blue!6},
-  monblock/.style={draw, rounded corners, rectangle, minimum width=2.6cm, minimum height=1.1cm, align=center, font=\small, fill=orange!12},
-  arrow/.style={-Latex, thick}
-]
-  \node[block] (gen)   {Packet\\Generator (TB)};
-  \node[block, right=1.0cm of gen]  (pcie)  {\texttt{pcie\_model}};
-  \node[block, right=1.0cm of pcie] (dma)   {\texttt{dma\_model}};
-  \node[block, right=1.0cm of dma]  (mm2s)  {\texttt{axi\_mm2s}\\\texttt{\_adapter}};
-
-  \node[block, below=1.6cm of mm2s]  (fifo)  {\texttt{axis\_fifo}};
-  \node[block, left=1.0cm of fifo]   (batch) {\texttt{batching}\\\texttt{\_unit}};
-  \node[block, left=1.0cm of batch]  (sink)  {\texttt{stream}\\\texttt{\_sink}};
-  \node[monblock, left=1.0cm of sink] (mon)   {\texttt{latency}\\\texttt{\_monitor}};
-
-  \draw[arrow] (gen)  -- node[above,font=\tiny]{gen\_*} (pcie);
-  \draw[arrow] (pcie) -- node[above,font=\tiny]{pcie\_m\_*} (dma);
-  \draw[arrow] (dma)  -- node[above,font=\tiny]{dma\_m\_*} (mm2s);
-  \draw[arrow] (mm2s.south) -- ++(0,-0.55) -| node[pos=0.25,right,font=\tiny]{mm2s\_m\_*} (fifo.north);
-  \draw[arrow] (fifo)  -- node[above,font=\tiny]{fifo\_m\_*} (batch);
-  \draw[arrow] (batch) -- node[above,font=\tiny]{batch\_m\_*} (sink);
-  \draw[arrow] (sink)  -- node[above,font=\tiny]{pkt\_done}   (mon);
-  \draw[arrow] (gen.north) -- ++(0,0.55) -| node[pos=0.75,right,font=\tiny]{pkt\_inject} (mon.north);
-\end{tikzpicture}
-\caption{Pipeline architecture of the PCIe-AXI DMA streaming model. Solid arrows carry AXI4-Stream beats (\texttt{tvalid/tready/tdata/tkeep/tlast/tuser/tid}); the top-to-bottom arrow into \texttt{latency\_monitor} carries only the two scalar injection/completion event signals, not the data stream itself.}
-\label{fig:pipeline_overview}
+    \centering
+    \includegraphics[width=\textwidth]{Pictures/PCIE_SYSTEM_ARCH.png}
+    \caption{Pipeline architecture of the PCIe-AXI DMA streaming model. The pipeline consists of the packet generator, PCIe model, DMA model, AXI-MM2S adapter, AXI4-Stream FIFO, batching unit, and stream sink. The latency monitor observes packet injection and completion events for latency measurement.}
+    \label{fig:pipeline_overview}
 \end{figure}
 
-Every solid arrow in \autoref{fig:pipeline_overview} is a full AXI4-Stream connection (Section~\ref{sec:ch3_axi}): \texttt{tvalid}, \texttt{tready}, \texttt{tdata}, \texttt{tkeep}, \texttt{tlast}, \texttt{tuser}, and \texttt{tid}. Because every stage implements its own independent \texttt{tvalid}/\texttt{tready} handshake, back-pressure asserted anywhere downstream (for example, a full FIFO) propagates correctly upstream through every intervening stage without any stage needing to know about the others -- a direct consequence of the AXI4-Stream composability property noted in \autoref{sec:ch3_axi}.
+Every connection in the pipeline is a full AXI4-Stream interface (Section~\ref{sec:ch3_axi}), carrying \texttt{tvalid}, \texttt{tready}, \texttt{tdata}, \texttt{tkeep}, \texttt{tlast}, \texttt{tuser}, and \texttt{tid}. Because every stage implements its own independent \texttt{tvalid}/\texttt{tready} handshake, back-pressure asserted anywhere downstream, such as when the FIFO becomes full, propagates correctly upstream through the intervening stages. This allows the individual modules to operate independently while maintaining the composability and flow-control properties of the AXI4-Stream protocol described in Section~\ref{sec:ch3_axi}.
+
+
+% Every solid arrow in \autoref{fig:pipeline_overview} is a full AXI4-Stream connection (Section~\ref{sec:ch3_axi}): \texttt{tvalid}, \texttt{tready}, \texttt{tdata}, \texttt{tkeep}, \texttt{tlast}, \texttt{tuser}, and \texttt{tid}. Because every stage implements its own independent \texttt{tvalid}/\texttt{tready} handshake, back-pressure asserted anywhere downstream (for example, a full FIFO) propagates correctly upstream through every intervening stage without any stage needing to know about the others -- a direct consequence of the AXI4-Stream composability property noted in \autoref{sec:ch3_axi}.
 
 %----------------------------------------------------------------------------------------
 

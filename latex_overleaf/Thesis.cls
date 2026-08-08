@@ -226,7 +226,7 @@
                 {INDIAN INSTITUTE OF TECHNOLOGY JAMMU}} % Your university's name in capitals - this is currently used in the abstract page
                 {INDIAN INSTITUTE OF TECHNOLOGY JAMMU}}
 %-------------------------------------------------                
-\department{\texorpdfstring{\href{https://www.iitjammu.ac.in/cep/}{CEP Department}}{CEP Department}}
+\department{\texorpdfstring{\href{https://www.iitjammu.ac.in/cep/}{Electricrical Engineering}}{CEP Department}}
 %-------------------------------------------------                
 \DEPARTMENT{\texorpdfstring{\href{https://www.iitjammu.ac.in/cep/} % Your department's URL
                 {CONTINUING EDUCATION PROGRAM}} % Your department's name in capitals - this is not currently used anywhere in the template, cite it with \DEPTNAME if you want it
